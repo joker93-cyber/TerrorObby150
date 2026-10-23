@@ -9,6 +9,10 @@
 --   Tags                         -> KillBrick, FadeBrick, HideLocker, MovingKill
 --   Partes llamadas "VoidKill"   -> GameManager lanza el screamer de meme al tocarlas
 
+-- Diagnóstico: todo el generador corre protegido; si falla, el error queda en workspace:GetAttribute("GenError")
+workspace:SetAttribute("GenStarted", os.time())
+local genOk, genErr = xpcall(function()
+
 local CollectionService = game:GetService("CollectionService")
 local Lighting = game:GetService("Lighting")
 
@@ -314,6 +318,7 @@ end
 for stage = 1, TOTAL_STAGES do
 	local biome, biomeIndex = getBiome(stage)
 	local isBossStage = (stage % BOSS_EVERY == 0)
+	workspace:SetAttribute("GenStage", stage)
 	local stageFolder = Instance.new("Folder")
 	stageFolder.Name = "Stage_" .. stage
 	stageFolder.Parent = mapFolder
@@ -404,3 +409,12 @@ winLabel.Parent = winGui
 -- Señal para que GameManager sepa que el mapa está completo
 workspace:SetAttribute("MapReady", true)
 print("[LevelGenerator] Mapa listo: " .. TOTAL_STAGES .. " etapas")
+
+end, function(e)
+	return tostring(e) .. " | " .. debug.traceback()
+end)
+
+if not genOk then
+	warn("[LevelGenerator] ERROR: " .. tostring(genErr))
+	workspace:SetAttribute("GenError", string.sub(tostring(genErr), 1, 500))
+end
