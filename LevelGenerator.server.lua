@@ -1,4 +1,4 @@
--- LevelGenerator.server.lua (Edición Ciudad Apocalíptica de Otoño + Cine + Monstruos R6 + Tienda)
+-- LevelGenerator.server.lua (Toboganes, Escaleras, Laterales, Subidas/Bajadas y Screamers de Meme y Terror)
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
@@ -8,7 +8,7 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local VIP_GAMEPASS_ID = 2052196520
 
 -- ==========================================
--- 1. SUELO PRINCIPAL BLINDADO (ANTI-CAÍDA AL VACÍO)
+-- 1. SUELO DE INICIO INDESTRUCTIBLE
 -- ==========================================
 local oldLobby = Workspace:FindFirstChild("SafeStartLobby")
 if oldLobby then oldLobby:Destroy() end
@@ -20,7 +20,7 @@ safeLobby.Position = Vector3.new(0, -1, 0)
 safeLobby.Anchored = true
 safeLobby.CanCollide = true
 safeLobby.Material = Enum.Material.Brick
-safeLobby.Color = Color3.fromRGB(115, 65, 55) -- Ladrillo rojizo como en la plaza
+safeLobby.Color = Color3.fromRGB(115, 65, 55)
 safeLobby.Parent = Workspace
 
 local spawnLocation = Workspace:FindFirstChildOfClass("SpawnLocation") or Instance.new("SpawnLocation")
@@ -33,7 +33,7 @@ spawnLocation.Transparency = 1
 spawnLocation.Parent = Workspace
 
 -- ==========================================
--- 2. ATMÓSFERA DE OTOÑO APOCALÍPTICO (CIELO TORMENTOSO + LUZ NARANJA/ROJA)
+-- 2. ATMÓSFERA Y EFECTOS VISUALES
 -- ==========================================
 pcall(function()
 	for _, child in ipairs(Lighting:GetChildren()) do
@@ -42,43 +42,28 @@ pcall(function()
 		end
 	end
 
-	Lighting.ClockTime = 18.2
-	Lighting.Brightness = 2.0
-	Lighting.Ambient = Color3.fromRGB(110, 65, 50)
-	Lighting.OutdoorAmbient = Color3.fromRGB(135, 75, 55)
-	Lighting.FogStart = 70
-	Lighting.FogEnd = 420
-	Lighting.FogColor = Color3.fromRGB(45, 25, 25)
+	Lighting.ClockTime = 18.5
+	Lighting.Brightness = 1.9
+	Lighting.Ambient = Color3.fromRGB(100, 60, 50)
+	Lighting.OutdoorAmbient = Color3.fromRGB(120, 70, 50)
+	Lighting.FogStart = 50
+	Lighting.FogEnd = 380
+	Lighting.FogColor = Color3.fromRGB(40, 20, 25)
 
-	local sky = Instance.new("Sky")
+	local sky = Instance.new("Sky", Lighting)
 	sky.StarCount = 0
-	sky.CelestialBodiesShown = false
-	sky.Parent = Lighting
 
-	local atmo = Instance.new("Atmosphere")
-	atmo.Density = 0.36
-	atmo.Offset = 0.15
-	atmo.Color = Color3.fromRGB(120, 55, 40)
-	atmo.Decay = Color3.fromRGB(40, 20, 25)
-	atmo.Haze = 2.2
-	atmo.Parent = Lighting
+	local atmo = Instance.new("Atmosphere", Lighting)
+	atmo.Density = 0.38
+	atmo.Color = Color3.fromRGB(110, 50, 35)
 
-	local cc = Instance.new("ColorCorrectionEffect")
-	cc.Brightness = 0.03
-	cc.Contrast = 0.22
-	cc.Saturation = 0.15
-	cc.TintColor = Color3.fromRGB(255, 215, 190)
-	cc.Parent = Lighting
-
-	local bloom = Instance.new("BloomEffect")
-	bloom.Intensity = 0.8
+	local bloom = Instance.new("BloomEffect", Lighting)
+	bloom.Intensity = 0.9
 	bloom.Size = 24
-	bloom.Threshold = 0.85
-	bloom.Parent = Lighting
 end)
 
 -- ==========================================
--- 3. CARPETAS Y CONSTRUCTORES BASE
+-- 3. CARPETAS Y CONSTRUCTORES
 -- ==========================================
 local function getFolder(name)
 	local f = Workspace:FindFirstChild(name)
@@ -121,122 +106,41 @@ local function add3DSound(parent, id, vol, pitch, looped, maxDist)
 end
 
 -- ==========================================
--- 4. DECORACIÓN URBANA: CINE, EDIFICIOS CON VENTANAS ROJAS, CARPAS, ÁRBOLES Y HUELLAS
+-- 4. SCREAMERS DINÁMICOS EN PANTALLA (MEME / TERROR)
 -- ==========================================
--- 4.1 Gran Fachada del Cine / Teatro en la Plaza de Inicio (Detrás del jugador)
-local function buildCinemaFacade()
-	local zBack = 26
-	-- Muro principal del cine
-	makePart(Vector3.new(62, 34, 6), Vector3.new(0, 16, zBack), Enum.Material.Brick, Color3.fromRGB(130, 85, 75))
-	-- Torre central del cine
-	makePart(Vector3.new(26, 44, 8), Vector3.new(0, 21, zBack - 1), Enum.Material.Concrete, Color3.fromRGB(145, 115, 105))
+local function triggerScreenScreamer(player, isDeathMeme)
+	local pGui = player:FindFirstChild("PlayerGui")
+	if not pGui or pGui:FindFirstChild("ActiveScreamer") then return end
 
-	-- Tiras de neón verticales estilo cine clásico
-	makePart(Vector3.new(1.2, 18, 0.5), Vector3.new(-18, 20, zBack - 3.3), Enum.Material.Neon, Color3.fromRGB(255, 210, 170))
-	makePart(Vector3.new(1.2, 18, 0.5), Vector3.new(18, 20, zBack - 3.3), Enum.Material.Neon, Color3.fromRGB(255, 210, 170))
-	makePart(Vector3.new(1.2, 16, 0.5), Vector3.new(-8, 30, zBack - 5.2), Enum.Material.Neon, Color3.fromRGB(255, 210, 170))
-	makePart(Vector3.new(1.2, 16, 0.5), Vector3.new(8, 30, zBack - 5.2), Enum.Material.Neon, Color3.fromRGB(255, 210, 170))
+	local sg = Instance.new("ScreenGui")
+	sg.Name = "ActiveScreamer"
+	sg.IgnoreGuiInset = true
+	sg.Parent = pGui
 
-	-- Cartel rojo "NOW SHOWING" y Marquesina iluminada
-	local redBanner = makePart(Vector3.new(22, 6, 0.6), Vector3.new(0, 17, zBack - 5.2), Enum.Material.Neon, Color3.fromRGB(210, 20, 25))
-	local sGui = Instance.new("SurfaceGui", redBanner)
-	sGui.Face = Enum.NormalId.Front
-	local bTxt = Instance.new("TextLabel", sGui)
-	bTxt.Size = UDim2.new(1, 0, 1, 0)
-	bTxt.BackgroundTransparency = 1
-	bTxt.Text = "EN CARTELERA:\nPESADILLA 150"
-	bTxt.TextColor3 = Color3.fromRGB(255, 240, 220)
-	bTxt.Font = Enum.Font.GothamBlack
-	bTxt.TextScaled = true
+	local bg = Instance.new("Frame")
+	bg.Size = UDim2.new(1, 0, 1, 0)
+	bg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+	bg.BackgroundTransparency = 0.2
+	bg.Parent = sg
 
-	-- Marquesina saliente sobre la entrada
-	makePart(Vector3.new(20, 3, 8), Vector3.new(0, 12, zBack - 8), Enum.Material.Concrete, Color3.fromRGB(60, 50, 50))
-	makePart(Vector3.new(20.4, 0.6, 8.4), Vector3.new(0, 13.2, zBack - 8), Enum.Material.Neon, Color3.fromRGB(255, 170, 60))
+	local img = Instance.new("ImageLabel")
+	img.Size = UDim2.new(0, 480, 0, 480)
+	img.Position = UDim2.new(0.5, -240, 0.5, -240)
+	img.BackgroundTransparency = 1
+	-- ID de imagen de screamer / meme asustador de Roblox
+	img.Image = isDeathMeme and "rbxassetid://6023426915" or "rbxassetid://108088840" 
+	img.Parent = sg
 
-	-- Pósters luminosos en la parte baja
-	for i = -2, 2 do
-		if i ~= 0 then
-			local px = i * 9
-			makePart(Vector3.new(3.5, 5, 0.4), Vector3.new(px, 5, zBack - 3.3), Enum.Material.Neon, Color3.fromRGB(220, 35, 35))
-			makePart(Vector3.new(2.8, 4.2, 0.5), Vector3.new(px, 5, zBack - 3.4), Enum.Material.SmoothPlastic, Color3.fromRGB(25, 30, 55))
-		end
-	end
+	local soundId = isDeathMeme and 9114397505 or 9114221735
+	add3DSound(sg, soundId, 2.0, 1.1, false, 100):Play()
+
+	task.delay(1.8, function()
+		if sg then sg:Destroy() end
+	end)
 end
-buildCinemaFacade()
-
--- 4.2 Árboles de Otoño Naranjas
-local function createAutumnTree(pos)
-	makePart(Vector3.new(2.2, 13, 2.2), pos + Vector3.new(0, 6.5, 0), Enum.Material.Wood, Color3.fromRGB(65, 42, 32))
-	local leaves1 = makePart(Vector3.new(11, 8, 11), pos + Vector3.new(0, 14, 0), Enum.Material.Grass, Color3.fromRGB(215, 95, 30))
-	local leaves2 = makePart(Vector3.new(8, 6, 8), pos + Vector3.new(1.5, 18, -1), Enum.Material.Grass, Color3.fromRGB(235, 125, 35))
-	leaves1.CanCollide = false
-	leaves2.CanCollide = false
-end
-
--- 4.3 Carpas Blancas de Supervivencia con Mesa y Calabazas
-local function createCampTent(pos)
-	-- 4 postes finos
-	for _, dx in ipairs({-4.5, 4.5}) do
-		for _, dz in ipairs({-4.5, 4.5}) do
-			makePart(Vector3.new(0.4, 8, 0.4), pos + Vector3.new(dx, 4, dz), Enum.Material.Metal, Color3.fromRGB(200, 200, 205))
-		end
-	end
-	-- Techo blanco iluminado cálidamente
-	local roof = makePart(Vector3.new(10.5, 1.2, 10.5), pos + Vector3.new(0, 8.5, 0), Enum.Material.Fabric, Color3.fromRGB(245, 235, 220))
-	local roofTop = makePart(Vector3.new(6, 1.5, 6), pos + Vector3.new(0, 9.7, 0), Enum.Material.Fabric, Color3.fromRGB(245, 235, 220))
-	roofTop.CanCollide = false
-	local tLight = Instance.new("PointLight", roof)
-	tLight.Color = Color3.fromRGB(255, 185, 100)
-	tLight.Range = 28
-	tLight.Brightness = 1.8
-
-	-- Mesa con mantel naranja y calabaza
-	makePart(Vector3.new(5, 2.6, 2.8), pos + Vector3.new(0, 1.3, 0), Enum.Material.Fabric, Color3.fromRGB(215, 130, 45))
-	local pumpkin = makePart(Vector3.new(1.5, 1.4, 1.5), pos + Vector3.new(-1, 3.2, 0), Enum.Material.SmoothPlastic, Color3.fromRGB(235, 105, 20))
-	Instance.new("SpecialMesh", pumpkin).MeshType = Enum.MeshType.Sphere
-end
-
--- 4.4 Edificios en Ruinas con Ventanas Rojas Brillantes (En los laterales lejanos)
-local function createCityBuilding(pos, height)
-	local bldg = makePart(Vector3.new(18, height, 22), pos + Vector3.new(0, height / 2, 0), Enum.Material.Brick, Color3.fromRGB(95, 65, 60))
-	-- Ventanas rojas encendidas mirando hacia la avenida
-	local faceX = (pos.X < 0) and (pos.X + 9.1) or (pos.X - 9.1)
-	for row = 1, math.floor(height / 9) do
-		for col = -1, 1, 2 do
-			local win = makePart(Vector3.new(0.4, 4.5, 4.5), Vector3.new(faceX, row * 8, pos.Z + (col * 5)), Enum.Material.Neon, Color3.fromRGB(235, 55, 40))
-			win.CanCollide = false
-		end
-	end
-	return bldg
-end
-
--- 4.5 Farola Alta de Calle y Huellas Brillantes en el Suelo
-local function createStreetLamp(pos)
-	makePart(Vector3.new(0.8, 16, 0.8), pos + Vector3.new(0, 8, 0), Enum.Material.Metal, Color3.fromRGB(180, 185, 195))
-	local bulb = makePart(Vector3.new(3.5, 0.6, 1.4), pos + Vector3.new((pos.X < 0 and 1.5 or -1.5), 16, 0), Enum.Material.Neon, Color3.fromRGB(255, 245, 230))
-	local l = Instance.new("PointLight", bulb)
-	l.Color = Color3.fromRGB(255, 210, 160)
-	l.Range = 52
-	l.Brightness = 2.4
-end
-
-local function createGlowingFootprints(zPos)
-	for i = 1, 2 do
-		local fp = makePart(Vector3.new(0.9, 0.15, 1.8), Vector3.new((i == 1 and -1.2 or 1.2), 1.05, zPos - (i * 3)), Enum.Material.Neon, Color3.fromRGB(255, 95, 20))
-		fp.CanCollide = false
-	end
-end
-
--- Decorar la Plaza de Inicio con carpas, árboles de otoño y farolas
-createAutumnTree(Vector3.new(-24, 1, -8))
-createAutumnTree(Vector3.new(24, 1, -8))
-createCampTent(Vector3.new(-18, 1, 6))
-createCampTent(Vector3.new(18, 1, 6))
-createStreetLamp(Vector3.new(-14, 1, -14))
-createStreetLamp(Vector3.new(14, 1, -14))
 
 -- ==========================================
--- 5. DISTRITOS DE LA CIUDAD Y MONSTRUOS AVATAR R6
+-- 5. MONSTRUOS AVATAR R6 CON CARAS DE TERROR
 -- ==========================================
 local BIOMES = {
 	[1] = {Name = "Avenida del Cine Maldito", Mat = Enum.Material.Cobblestone, Col = Color3.fromRGB(105, 75, 65), Accent = Color3.fromRGB(255, 85, 25), Shirt = Color3.fromRGB(115, 25, 25), Face = "rbxassetid://7074764"},
@@ -322,26 +226,13 @@ local function createAvatarMonster(centerPos, radius, isBoss, biome, speed)
 	light.Range = isBoss and 36 or 22
 	light.Brightness = 2.5
 
-	local bg = Instance.new("BillboardGui", head)
-	bg.Size = UDim2.new(0, 130, 0, 34)
-	bg.StudsOffset = Vector3.new(0, 3.2 * s, 0)
-	bg.MaxDistance = 75
-
-	local lbl = Instance.new("TextLabel", bg)
-	lbl.Size = UDim2.new(1, 0, 1, 0)
-	lbl.BackgroundTransparency = 1
-	lbl.Text = isBoss and "💀 JEFE DEL DISTRITO 💀" or "🔪 ACECHADOR"
-	lbl.TextColor3 = Color3.fromRGB(255, 90, 40)
-	lbl.TextStrokeTransparency = 0
-	lbl.TextScaled = true
-	lbl.Font = Enum.Font.GothamBlack
-
 	add3DSound(torso, 9114397505, isBoss and 1.0 or 0.7, isBoss and 0.45 or 0.65, true, 65)
 	local roar = add3DSound(torso, 9114221735, 1.2, 0.65, false, 80)
 
 	local function onHit(hit)
 		local char = hit.Parent
 		local hum = char and char:FindFirstChildOfClass("Humanoid")
+		local plr = Players:GetPlayerFromCharacter(char)
 		if hum and hum.Health > 0 and not char:GetAttribute("IsHiding") and not torso:GetAttribute("Stunned") then
 			if char:GetAttribute("HasShield") then
 				char:SetAttribute("HasShield", false)
@@ -352,6 +243,7 @@ local function createAvatarMonster(centerPos, radius, isBoss, biome, speed)
 				return
 			end
 			roar:Play()
+			if plr then triggerScreenScreamer(plr, false) end -- Screamer de terror al ser atrapado por monstruo
 			hum.Health = 0
 		end
 	end
@@ -367,56 +259,22 @@ local function createAvatarMonster(centerPos, radius, isBoss, biome, speed)
 end
 
 -- ==========================================
--- 6. GENERACIÓN DE LAS 150 ETAPAS EN LA CIUDAD EN RUINAS
+-- 6. GENERACIÓN DINÁMICA DE 150 NIVELES (SUBIDAS, BAJADAS, LATERALES, TOBOGANES Y ESCALERAS)
 -- ==========================================
 local currentZ = -24
-local STAGE_LEN = 68
-
--- Suelo de falla volcánica / grieta naranja brillante en el fondo para todo el mapa
-for chunk = 1, 10 do
-	local chunkLen = STAGE_LEN * 15
-	local zCenter = -24 - ((chunk - 0.5) * chunkLen)
-	local lavaCrack = makePart(Vector3.new(140, 2, chunkLen), Vector3.new(0, -16, zCenter), Enum.Material.Neon, Color3.fromRGB(255, 85, 20))
-	lavaCrack.Transparency = 0.2
-	lavaCrack.Touched:Connect(function(hit)
-		local hum = hit.Parent and hit.Parent:FindFirstChildOfClass("Humanoid")
-		if hum then hum.Health = 0 end
-	end)
-end
+local STAGE_LEN = 62
 
 for stage = 1, 150 do
 	local bIdx = math.clamp(math.ceil(stage / 30), 1, 5)
 	local biome = BIOMES[bIdx]
 	local zCenter = currentZ - (STAGE_LEN / 2)
 
-	-- Escenografía de ciudad a los lados de la calle (sin encerrar al jugador)
-	if stage % 2 == 1 then
-		createCityBuilding(Vector3.new(-38, -6, zCenter), 32 + (stage % 3) * 8)
-		createCityBuilding(Vector3.new(38, -6, zCenter), 36 + (stage % 2) * 10)
-		createAutumnTree(Vector3.new(-15, 0, currentZ - 4))
-		createStreetLamp(Vector3.new(11, 0, currentZ))
-	else
-		createAutumnTree(Vector3.new(15, 0, currentZ - 4))
-		createStreetLamp(Vector3.new(-11, 0, currentZ))
-	end
-
-	-- Checkpoint de adoquín y ladrillo con líneas naranjas luminosas
-	local cp = makePart(Vector3.new(22, 2, 16), Vector3.new(0, 0, currentZ), biome.Mat, biome.Col, checkpointsFolder)
+	-- Checkpoint base
+	local cp = makePart(Vector3.new(20, 2, 14), Vector3.new(0, 0, currentZ), biome.Mat, biome.Col, checkpointsFolder)
 	cp.Name = tostring(stage)
 
-	-- Líneas brillantes en la calle como en las capturas
-	local lineL = makePart(Vector3.new(0.4, 0.2, 16), cp.Position + Vector3.new(-7, 1.05, 0), Enum.Material.Neon, Color3.fromRGB(255, 150, 40), cp)
-	local lineR = makePart(Vector3.new(0.4, 0.2, 16), cp.Position + Vector3.new(7, 1.05, 0), Enum.Material.Neon, Color3.fromRGB(255, 150, 40), cp)
-	lineL.CanCollide = false
-	lineR.CanCollide = false
-
-	createGlowingFootprints(currentZ + 4)
-
-	-- Carpa blanca decorativa en los checkpoints impares
-	if stage % 3 == 1 then
-		local sidePlot = makePart(Vector3.new(14, 2, 14), cp.Position + Vector3.new(16, 0, 0), Enum.Material.Cobblestone, biome.Col)
-		createCampTent(sidePlot.Position + Vector3.new(0, 1, 0))
-	end
+	local pad = makePart(Vector3.new(6, 0.3, 6), cp.Position + Vector3.new(0, 1.1, 0), Enum.Material.Neon, Color3.fromRGB(0, 230, 115), cp)
+	pad.CanCollide = false
 
 	local bg = Instance.new("BillboardGui", cp)
 	bg.Size = UDim2.new(0, 160, 0, 48)
@@ -432,59 +290,55 @@ for stage = 1, 150 do
 	txt.TextScaled = true
 	txt.Font = Enum.Font.GothamBlack
 
-	createLocker(cp.Position + Vector3.new(-8, 1, -2))
+	createLocker(cp.Position + Vector3.new(-7, 1, -2))
 
-	local cType = (stage - 1) % 4
+	-- Patrones dinámicos cambiantes por cada etapa (Toboganes, Escaleras, Subidas, Laterales)
+	local pattern = (stage - 1) % 5
+
 	if stage % 30 == 0 then
+		-- Arena de Jefe
 		local arena = makePart(Vector3.new(30, 2, STAGE_LEN - 16), Vector3.new(0, 0, zCenter), biome.Mat, biome.Col)
-		createLocker(arena.Position + Vector3.new(11, 1, 8))
-		createLocker(arena.Position + Vector3.new(-11, 1, -8))
 		createAvatarMonster(arena.Position, 11, true, biome, 15.5)
-	elseif cType == 0 then
-		-- Calle agrietada con barricadas, huellas brillantes y asesino patrullando
-		local street = makePart(Vector3.new(16, 2, STAGE_LEN - 16), Vector3.new(0, 0, zCenter), biome.Mat, biome.Col)
-		createGlowingFootprints(zCenter + 10)
-		createGlowingFootprints(zCenter - 8)
-		createLocker(street.Position + Vector3.new(5.5, 1, 0))
-		makePart(Vector3.new(5.5, 3.5, 1.5), street.Position + Vector3.new(-3.5, 2.7, 11), Enum.Material.Metal, biome.Accent)
-		makePart(Vector3.new(5.5, 3.5, 1.5), street.Position + Vector3.new(3.5, 2.7, -11), Enum.Material.Metal, biome.Accent)
-		createAvatarMonster(street.Position, 5.5, false, biome, 13.5)
-	elseif cType == 1 then
-		-- Calzada rota con trampas oscilantes incandescentes
-		makePart(Vector3.new(9, 2, STAGE_LEN - 16), Vector3.new(0, 0, zCenter), Enum.Material.Slate, Color3.fromRGB(95, 75, 65))
-		for s = 1, 3 do
-			local saw = makePart(Vector3.new(5, 5, 0.8), Vector3.new(0, 3.5, currentZ - 12 - (s * 12)), Enum.Material.Neon, biome.Accent)
+	elseif pattern == 0 then
+		-- Subida empinada y desvío lateral
+		local ramp = makePart(Vector3.new(14, 2, STAGE_LEN - 16), Vector3.new(5, 4, zCenter), biome.Mat, biome.Col)
+		ramp.Orientation = Vector3.new(-15, 0, 0)
+		createAvatarMonster(ramp.Position + Vector3.new(0, 3, 0), 5, false, biome, 13.5)
+	elseif pattern == 1 then
+		-- Tobogán de alta velocidad en bajada
+		local slide = makePart(Vector3.new(12, 1.5, STAGE_LEN - 12), Vector3.new(-4, -3, zCenter), Enum.Material.Ice, Color3.fromRGB(200, 150, 120))
+		slide.Orientation = Vector3.new(22, 0, 0)
+		for s = 1, 2 do
+			local saw = makePart(Vector3.new(4, 4, 0.8), Vector3.new(-4, 0, currentZ - (s * 20)), Enum.Material.Neon, biome.Accent)
 			saw.CanCollide = false
 			saw.Touched:Connect(function(hit)
 				local hum = hit.Parent and hit.Parent:FindFirstChildOfClass("Humanoid")
-				if hum and not hit.Parent:GetAttribute("HasShield") then hum.Health = 0 end
-			end)
-			table.insert(movingHazards, {Part = saw, Origin = saw.Position, Amp = 6, Speed = 2.5 + (s * 0.4), Phase = s})
-		end
-	elseif cType == 2 then
-		-- Escombros y losas agrietadas sobre el cráter (una firme y otra se hunde)
-		for r = 1, 4 do
-			local rZ = currentZ - 6 - (r * 10.5)
-			local leftSafe = ((stage + r) % 2 == 0)
-			local lPad = makePart(Vector3.new(6.8, 1.4, 8), Vector3.new(-4.5, 0, rZ), Enum.Material.Brick, leftSafe and Color3.fromRGB(130, 75, 60) or Color3.fromRGB(75, 45, 40))
-			local rPad = makePart(Vector3.new(6.8, 1.4, 8), Vector3.new(4.5, 0, rZ), Enum.Material.Brick, (not leftSafe) and Color3.fromRGB(130, 75, 60) or Color3.fromRGB(75, 45, 40))
-			local fake = leftSafe and rPad or lPad
-			fake.Touched:Connect(function(hit)
-				local hum = hit.Parent and hit.Parent:FindFirstChildOfClass("Humanoid")
-				if hum and fake.CanCollide then
-					fake.CanCollide = false
-					fake.Transparency = 0.65
-					task.delay(2.5, function() if fake then fake.CanCollide = true fake.Transparency = 0 end end)
+				local plr = Players:GetPlayerFromCharacter(hit.Parent)
+				if hum and not hit.Parent:GetAttribute("HasShield") then
+					if plr then triggerScreenScreamer(plr, true) end
+					hum.Health = 0
 				end
 			end)
+			table.insert(movingHazards, {Part = saw, Origin = saw.Position, Amp = 5, Speed = 3, Phase = s})
+		end
+	elseif pattern == 2 then
+		-- Escaleras escalonadas hacia arriba
+		for stp = 1, 5 do
+			makePart(Vector3.new(12, 1.5, 8), Vector3.new(0, stp * 2, currentZ - (stp * 9)), biome.Mat, biome.Col)
+		end
+	elseif pattern == 3 then
+		-- Zigzag lateral (ir saltando hacia los costados)
+		for zc = 1, 4 do
+			local xOffset = (zc % 2 == 0) and 6 or -6
+			makePart(Vector3.new(8, 1.5, 8), Vector3.new(xOffset, zc * 1.2, currentZ - (zc * 12)), biome.Mat, biome.Col)
 		end
 	else
-		-- Portal de Piedra / Reja Bloqueada con Válvula + Acechador
+		-- Pasillo de trampas móviles y válvulas de escape
 		local hall = makePart(Vector3.new(16, 2, STAGE_LEN - 16), Vector3.new(0, 0, zCenter), biome.Mat, biome.Col)
 		local gate = makePart(Vector3.new(16, 10, 1.5), Vector3.new(0, 6, currentZ - STAGE_LEN + 10), Enum.Material.CorrodedMetal, Color3.fromRGB(65, 50, 50))
 		local valve = makePart(Vector3.new(2.5, 4.5, 2.5), hall.Position + Vector3.new(-5.5, 3.2, 4), Enum.Material.Neon, Color3.fromRGB(255, 65, 30))
 		local gp = Instance.new("ProximityPrompt", valve)
-		gp.ActionText = "Activar Paso"
+		gp.ActionText = "Abrir Paso"
 		gp.HoldDuration = 0.3
 		gp.Triggered:Connect(function()
 			gate.CanCollide = false
@@ -492,7 +346,6 @@ for stage = 1, 150 do
 			valve.Color = Color3.fromRGB(60, 240, 90)
 			task.delay(6, function() if gate then gate.CanCollide = true gate.Transparency = 0 valve.Color = Color3.fromRGB(255, 65, 30) end end)
 		end)
-		createLocker(hall.Position + Vector3.new(5.5, 1, -4))
 		createAvatarMonster(hall.Position + Vector3.new(0, 0, -6), 5, false, biome, 13)
 	end
 
@@ -500,19 +353,15 @@ for stage = 1, 150 do
 end
 
 -- ==========================================
--- 7. SÚPER TIENDA Y CRUCIFIJO CONGELADOR
+-- 7. SÚPER TIENDA Y CRUCIFIJO
 -- ==========================================
 local function giveCrucifix(player)
 	local bp = player:FindFirstChildOfClass("Backpack")
 	if not bp or bp:FindFirstChild("Crucifijo Sagrado") then return end
 	local tool = Instance.new("Tool")
 	tool.Name = "Crucifijo Sagrado"
-	local handle = Instance.new("Part")
+	local handle = makePart(Vector3.new(0.8, 3, 0.4), Vector3.new(0,0,0), Enum.Material.Neon, Color3.fromRGB(255, 200, 60), tool)
 	handle.Name = "Handle"
-	handle.Size = Vector3.new(0.8, 3, 0.4)
-	handle.Material = Enum.Material.Neon
-	handle.Color = Color3.fromRGB(255, 200, 60)
-	handle.Parent = tool
 	local snd = add3DSound(handle, 9114074523, 1.2, 1.5, false, 50)
 
 	tool.Activated:Connect(function()
@@ -605,12 +454,14 @@ local function createShopGui(player)
 end
 
 -- ==========================================
--- 8. SPAWN DE JUGADORES Y MOVIMIENTO 60 FPS
+-- 8. SPAWN Y DETECCIÓN DE CAÍDA AL VACÍO (SCREAMER DE MEME)
 -- ==========================================
 local function onCharAdded(player, char)
 	task.wait(0.1)
 	local hrp = char:WaitForChild("HumanoidRootPart", 5)
-	if not hrp then return end
+	local hum = char:WaitForChild("Humanoid", 5)
+	if not hrp or not hum then return end
+
 	local st = player:FindFirstChild("leaderstats") and player.leaderstats:FindFirstChild("Stage")
 	local cp = checkpointsFolder:FindFirstChild(tostring((st and st.Value) or 1))
 	if st and st.Value > 1 and cp then
@@ -619,6 +470,13 @@ local function onCharAdded(player, char)
 		hrp.CFrame = CFrame.new(0, 4, 8)
 	end
 	giveCrucifix(player)
+
+	-- Detectar muerte por caída al vacío para activar el Screamer de meme
+	hum.Died:Connect(function()
+		if hrp.Position.Y < -5 then
+			triggerScreenScreamer(player, true)
+		end
+	end)
 end
 
 local function setupPlayer(player)
