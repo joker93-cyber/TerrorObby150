@@ -9,6 +9,10 @@ local victoryEvent = ReplicatedStorage:WaitForChild("VictoryEvent")
 local killersFolder = workspace:WaitForChild("ActiveKillers")
 local playerGui = player:WaitForChild("PlayerGui")
 
+-- Imagen del meme que se ríe al caer. Pega un ID real de imagen: "rbxassetid://NUMERO".
+-- Si lo dejas vacío se usa un emoji gigante 🤣 (funciona sin ningún recurso externo).
+local MEME_IMAGE_ID = ""
+
 local DANGER_RANGE = 45
 local SCAN_INTERVAL = 0.1
 
@@ -48,6 +52,28 @@ scareText.Font = Enum.Font.Creepster
 scareText.TextScaled = true
 scareText.ZIndex = 11
 scareText.Parent = jumpscareFrame
+
+local memeEmoji = Instance.new("TextLabel")
+memeEmoji.AnchorPoint = Vector2.new(0.5, 0.5)
+memeEmoji.Position = UDim2.fromScale(0.5, 0.42)
+memeEmoji.Size = UDim2.fromScale(0.6, 0.5)
+memeEmoji.BackgroundTransparency = 1
+memeEmoji.Text = "🤣"
+memeEmoji.TextScaled = true
+memeEmoji.Visible = false
+memeEmoji.ZIndex = 12
+memeEmoji.Parent = jumpscareFrame
+
+local memeImage = Instance.new("ImageLabel")
+memeImage.AnchorPoint = Vector2.new(0.5, 0.5)
+memeImage.Position = UDim2.fromScale(0.5, 0.42)
+memeImage.Size = UDim2.fromScale(0.6, 0.6)
+memeImage.BackgroundTransparency = 1
+memeImage.Image = MEME_IMAGE_ID
+memeImage.ScaleType = Enum.ScaleType.Fit
+memeImage.Visible = false
+memeImage.ZIndex = 12
+memeImage.Parent = jumpscareFrame
 
 local victoryLabel = Instance.new("TextLabel")
 victoryLabel.Size = UDim2.fromScale(0.8, 0.14)
@@ -227,28 +253,77 @@ end)
 
 ---------------------------------------------------------------- JUMPSCARE Y VICTORIA
 local scareToken = 0
+local hasMemeImage = MEME_IMAGE_ID ~= ""
+
 jumpscareEvent.OnClientEvent:Connect(function(killerType)
 	scareToken += 1
 	local token = scareToken
+	local reduced = player:GetAttribute("ReduceScares") == true
+	local isMeme = (killerType == "FALL")
 
-	if killerType == "BOSS" then
+	memeEmoji.Visible = isMeme and not hasMemeImage
+	memeImage.Visible = isMeme and hasMemeImage
+	scareText.Position = isMeme and UDim2.fromScale(0, 0.35) or UDim2.fromScale(0, 0)
+	scareText.Size = isMeme and UDim2.fromScale(1, 0.25) or UDim2.fromScale(1, 1)
+
+	if isMeme then
+		scareText.Text = "¡JAJAJA, CAÍSTE!"
+		scareText.TextColor3 = Color3.fromRGB(90, 40, 0)
+	elseif killerType == "BOSS" then
 		scareText.Text = "💀 ¡EL JEFE DEVORÓ TU ALMA!"
+		scareText.TextColor3 = Color3.fromRGB(200, 0, 0)
 	elseif killerType == "GHOST" then
 		scareText.Text = "👻 ¡ALMA EN PENA!"
+		scareText.TextColor3 = Color3.fromRGB(200, 0, 0)
 	else
 		scareText.Text = "🔪 ¡NO ESCAPASTE!"
+		scareText.TextColor3 = Color3.fromRGB(200, 0, 0)
 	end
 
 	jumpscareFrame.Visible = true
-	for i = 1, 6 do
-		if token ~= scareToken then
-			return -- otro jumpscare tomó el control
+
+	if reduced then
+		-- Modo suave: sin parpadeo, fondo oscuro y corto
+		jumpscareFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+		jumpscareFrame.BackgroundTransparency = 0.35
+		task.wait(isMeme and 0.9 or 0.6)
+		if token == scareToken then
+			jumpscareFrame.Visible = false
+			jumpscareFrame.BackgroundTransparency = 0
+			memeEmoji.Visible = false
+			memeImage.Visible = false
 		end
-		jumpscareFrame.BackgroundColor3 = (i % 2 == 0) and Color3.fromRGB(180, 0, 0) or Color3.fromRGB(10, 10, 10)
-		task.wait(0.06)
+		return
+	end
+
+	jumpscareFrame.BackgroundTransparency = 0
+	if isMeme then
+		-- Meme: fondo amarillo y la cara se sacude ~1.5 s
+		for i = 1, 15 do
+			if token ~= scareToken then
+				return -- otro screamer tomó el control
+			end
+			jumpscareFrame.BackgroundColor3 = (i % 2 == 0) and Color3.fromRGB(255, 225, 60) or Color3.fromRGB(255, 160, 40)
+			local tilt = (i % 2 == 0) and 9 or -9
+			memeEmoji.Rotation = tilt
+			memeImage.Rotation = tilt
+			task.wait(0.1)
+		end
+	else
+		for i = 1, 6 do
+			if token ~= scareToken then
+				return
+			end
+			jumpscareFrame.BackgroundColor3 = (i % 2 == 0) and Color3.fromRGB(180, 0, 0) or Color3.fromRGB(10, 10, 10)
+			task.wait(0.06)
+		end
 	end
 	if token == scareToken then
 		jumpscareFrame.Visible = false
+		memeEmoji.Visible = false
+		memeImage.Visible = false
+		memeEmoji.Rotation = 0
+		memeImage.Rotation = 0
 	end
 end)
 
@@ -263,4 +338,45 @@ victoryEvent.OnClientEvent:Connect(function(totalWins)
 			victoryLabel.Visible = false
 		end
 	end)
+end)
+
+---------------------------------------------------------------- AJUSTE: SUSTOS SUAVES
+local settingsGui = Instance.new("ScreenGui")
+settingsGui.Name = "SettingsHUD"
+settingsGui.ResetOnSpawn = false
+settingsGui.DisplayOrder = 41
+pcall(function()
+	settingsGui.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets
+end)
+settingsGui.Parent = playerGui
+
+local softBtn = Instance.new("TextButton")
+softBtn.Name = "SoftScaresButton"
+softBtn.Size = UDim2.fromScale(0.17, 0.065)
+softBtn.Position = UDim2.fromScale(0.015, 0.02)
+softBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+softBtn.BackgroundTransparency = 0.15
+softBtn.TextColor3 = Color3.fromRGB(235, 235, 240)
+softBtn.Font = Enum.Font.GothamBold
+softBtn.TextScaled = true
+softBtn.Selectable = true
+softBtn.Parent = settingsGui
+
+local softCorner = Instance.new("UICorner")
+softCorner.CornerRadius = UDim.new(0.2, 0)
+softCorner.Parent = softBtn
+
+local softLimit = Instance.new("UISizeConstraint")
+softLimit.MinSize = Vector2.new(110, 38)
+softLimit.MaxSize = Vector2.new(210, 60)
+softLimit.Parent = softBtn
+
+local function refreshSoftButton()
+	local reduced = player:GetAttribute("ReduceScares") == true
+	softBtn.Text = reduced and "😌 Sustos suaves: SÍ" or "😱 Sustos suaves: NO"
+end
+refreshSoftButton()
+softBtn.Activated:Connect(function()
+	player:SetAttribute("ReduceScares", player:GetAttribute("ReduceScares") ~= true)
+	refreshSoftButton()
 end)
