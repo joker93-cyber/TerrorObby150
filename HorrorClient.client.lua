@@ -395,7 +395,7 @@ if DEBUG_OVERLAY then
 
 	local dbgLabel = Instance.new("TextLabel")
 	dbgLabel.Position = UDim2.fromScale(0.3, 0.02)
-	dbgLabel.Size = UDim2.fromScale(0.5, 0.34)
+	dbgLabel.Size = UDim2.fromScale(0.46, 0.55)
 	dbgLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 	dbgLabel.BackgroundTransparency = 0.35
 	dbgLabel.TextColor3 = Color3.fromRGB(120, 255, 140)
@@ -403,7 +403,7 @@ if DEBUG_OVERLAY then
 	dbgLabel.TextYAlignment = Enum.TextYAlignment.Top
 	dbgLabel.TextWrapped = true
 	dbgLabel.Font = Enum.Font.Code
-	dbgLabel.TextSize = 13
+	dbgLabel.TextSize = 12
 	dbgLabel.Text = "diagnóstico..."
 	dbgLabel.Parent = dbgGui
 
@@ -435,6 +435,10 @@ if DEBUG_OVERLAY then
 				lines[#lines + 1] = "Personaje: no existe"
 			end
 			lines[#lines + 1] = "Servidor: " .. tostring(player:GetAttribute("DbgServer"))
+			lines[#lines + 1] = "PlaceVersion: " .. tostring(game.PlaceVersion) .. "  Panel: B4"
+			lines[#lines + 1] = "Generador: inicio=" .. tostring(workspace:GetAttribute("GenStarted")) .. " etapa=" .. tostring(workspace:GetAttribute("GenStage"))
+			lines[#lines + 1] = "ERROR generador: " .. tostring(workspace:GetAttribute("GenError"))
+			lines[#lines + 1] = "GameManager: " .. tostring(workspace:GetAttribute("GMStatus"))
 			dbgLabel.Text = table.concat(lines, "\n")
 		end
 	end)
