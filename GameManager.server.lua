@@ -258,7 +258,20 @@ local function placeAtCheckpoint(player, char)
 	if not hrp or not cp or not char.Parent then
 		return
 	end
-	char:PivotTo(cp.CFrame * CFrame.new(0, 4, 0))
+	local target = cp.CFrame * CFrame.new(0, 4, 0)
+	-- Congelar al jugador mientras el cliente carga el suelo de una etapa lejana
+	-- (sin esto cae al vacío, muere y reaparece en el mismo sitio: bucle infinito)
+	hrp.Anchored = true
+	pcall(function()
+		player:RequestStreamAroundAsync(target.Position, 4)
+	end)
+	if char.Parent and player.Character == char then
+		char:PivotTo(target)
+		task.wait(0.4)
+	end
+	if hrp.Parent and player:GetAttribute("IsHidden") ~= true then
+		hrp.Anchored = false
+	end
 end
 
 local function handleCheckpointTouch(cp, hit)
@@ -651,9 +664,6 @@ local function onPlayerAdded(player)
 	-- Conectar ANTES de cargar datos para no perder el primer spawn
 	player.CharacterAdded:Connect(function(char)
 		clearHideState(player)
-		if ready[player] then
-			placeAtCheckpoint(player, char)
-		end
 		-- Respaldo: si muere muy por debajo del mapa, también cuenta como caída
 		task.spawn(function()
 			local hum = char:WaitForChild("Humanoid", 10)
@@ -666,6 +676,9 @@ local function onPlayerAdded(player)
 				end)
 			end
 		end)
+		if ready[player] then
+			placeAtCheckpoint(player, char)
+		end
 	end)
 
 	local ok, data = retry(function()
