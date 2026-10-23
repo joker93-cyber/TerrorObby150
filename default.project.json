@@ -5,7 +5,7 @@
 
     "Workspace": {
       "$properties": {
-        "StreamingEnabled": true,
+        "StreamingEnabled": false,
         "StreamingMinRadius": 64,
         "StreamingTargetRadius": 160
       }
