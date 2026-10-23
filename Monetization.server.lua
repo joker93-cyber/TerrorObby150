@@ -4,8 +4,8 @@ local DataStoreService = game:GetService("DataStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 ---------------------------------------------------------------- CONFIGURACIÓN (único sitio que editas)
-local SKIP_STAGE_PRODUCT_ID = 0 -- ID del Producto de Desarrollador "Saltar Etapa"
-local VIP_GAMEPASS_ID = 0 -- ID del GamePass "Pack Superviviente VIP"
+local SKIP_STAGE_PRODUCT_ID = 3721391740
+local VIP_GAMEPASS_ID = 2052196520
 ----------------------------------------------------------------
 
 local VIP_WALKSPEED = 22
