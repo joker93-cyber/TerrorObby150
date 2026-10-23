@@ -12,18 +12,18 @@ local killersFolder = workspace:WaitForChild("ActiveKillers")
 
 ---------------------------------------------------------------- SONIDOS
 -- IMPORTANTE: son marcadores temporales. Reemplázalos por IDs reales del Creator Store
--- (formato "rbxassetid://123456789"). Con "" el sonido simplemente no suena.
 local SOUND_IDS = {
-	Heartbeat = "rbxasset://sounds/bass.wav", -- latido (loop corto de ~1 s)
-	Whisper = "rbxasset://sounds/swoosh.wav", -- susurro/respiración (loop)
-	Scream = "rbxasset://sounds/impact_explosion_03.mp3", -- grito del jumpscare
-	Sting = "rbxasset://sounds/impact_explosion_03.mp3", -- aviso 3D al detectar entidad
-	Victory = "rbxasset://sounds/victory.wav",
-	Hide = "rbxasset://sounds/switch.wav", -- puerta de armario
-	Ambient = "", -- drone ambiental opcional (loop)
-	-- Risa del screamer de meme al caer. Pega aquí un ID real: "rbxassetid://NUMERO" (vacío = sin sonido)
-	Laugh = "",
+	Heartbeat = "rbxassetid://9113652855", -- Latido profundo cuando el asesino se acerca
+	Whisper = "rbxassetid://9114221580", -- Susurro/respiración 3D del monstruo
+	Scream = "rbxassetid://9114397505", -- Grito aterrador cuando te atrapa un monstruo
+	Sting = "rbxassetid://9114221735", -- Aviso 3D de susto al detectar al monstruo
+	Victory = "rbxassetid://9114074523", -- Sonido al ganar
+	Hide = "rbxassetid://9114074523", -- Puerta metálica del armario
+	Ambient = "rbxassetid://1839246711", -- Música/ambiente tenebroso constante de fondo
+	Laugh = "rbxassetid://9114397505", -- Audio cuando sale el screamer de meme al caer
 }
+
+
 
 ---------------------------------------------------------------- CONFIGURACIÓN
 local LOW_MEMORY = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
