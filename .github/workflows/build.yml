@@ -1,0 +1,75 @@
+name: Build and Publish TerrorObby150
+
+on:
+  push:
+    branches: ["main", "master"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verificar archivos del proyecto
+        run: |
+          for f in \
+            default.project.json \
+            ProceduralModels.lua \
+            LevelGenerator.server.lua \
+            GameManager.server.lua \
+            Monetization.server.lua \
+            HorrorClient.client.lua \
+            AudioManager.client.lua \
+            ShopClient.client.lua
+          do
+            if [ ! -f "$f" ]; then
+              echo "::error::Falta el archivo $f"
+              exit 1
+            fi
+          done
+
+      - name: Instalar Rojo 7.4.4
+        run: |
+          curl -fsSL -o rojo.zip "https://github.com/rojo-rbx/rojo/releases/download/v7.4.4/rojo-7.4.4-linux-x86_64.zip"
+          unzip -o rojo.zip rojo
+          chmod +x rojo
+          sudo mv rojo /usr/local/bin/rojo
+          rojo --version
+
+      - name: Compilar TerrorObby150.rbxl
+        run: rojo build default.project.json --output TerrorObby150.rbxl
+
+      - name: Subir copia descargable (Artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: TerrorObby150
+          path: TerrorObby150.rbxl
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publicar directamente en Roblox (Open Cloud)
+        env:
+          ROBLOX_API_KEY: ${{ secrets.ROBLOX_API_KEY }}
+          UNIVERSE_ID: ${{ secrets.ROBLOX_UNIVERSE_ID }}
+          PLACE_ID: ${{ secrets.ROBLOX_PLACE_ID }}
+        run: |
+          if [ -z "$ROBLOX_API_KEY" ] || [ -z "$UNIVERSE_ID" ] || [ -z "$PLACE_ID" ]; then
+            echo "::warning::Faltan los Secrets de Roblox. Se generó el archivo .rbxl pero no se subió a Roblox."
+            exit 0
+          fi
+          HTTP_STATUS=$(curl -s -o response.txt -w "%{http_code}" \
+            -X POST "https://apis.roblox.com/universes/v1/${UNIVERSE_ID}/places/${PLACE_ID}/versions?versionType=Published" \
+            -H "x-api-key: ${ROBLOX_API_KEY}" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary @TerrorObby150.rbxl)
+          cat response.txt
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "::error::Error al publicar en Roblox (HTTP $HTTP_STATUS)"
+            exit 1
+          fi
+          echo "✅ ¡Juego publicado exitosamente en tu cuenta de Roblox!"
