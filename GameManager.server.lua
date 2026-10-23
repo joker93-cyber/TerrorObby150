@@ -15,14 +15,18 @@ local victoryEvent = Instance.new("RemoteEvent")
 victoryEvent.Name = "VictoryEvent"
 victoryEvent.Parent = ReplicatedStorage
 
+workspace:SetAttribute("GMStatus", "inicio: cargando ProceduralModels")
 local ProceduralModels = require(ReplicatedStorage:WaitForChild("ProceduralModels"))
+workspace:SetAttribute("GMStatus", "esperando carpeta Checkpoints")
 
 ---------------------------------------------------------------- ESPERAR MAPA
 local checkpointsFolder = workspace:WaitForChild("Checkpoints")
 local killersFolder = workspace:WaitForChild("ActiveKillers")
+workspace:SetAttribute("GMStatus", "esperando MapReady")
 if not workspace:GetAttribute("MapReady") then
 	workspace:GetAttributeChangedSignal("MapReady"):Wait()
 end
+workspace:SetAttribute("GMStatus", "mapa listo, iniciando")
 
 local STAGE_LENGTH = workspace:GetAttribute("StageLength") or 140
 local TOTAL_STAGES = workspace:GetAttribute("TotalStages") or 150
@@ -764,6 +768,7 @@ Players.PlayerRemoving:Connect(onPlayerRemoving)
 for _, plr in ipairs(Players:GetPlayers()) do
 	task.spawn(onPlayerAdded, plr)
 end
+workspace:SetAttribute("GMStatus", "activo")
 
 -- Diagnóstico: cada segundo publica lo que ve el servidor (HorrorClient lo muestra en pantalla)
 if DEBUG_SERVER then
