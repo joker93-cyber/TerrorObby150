@@ -380,3 +380,62 @@ softBtn.Activated:Connect(function()
 	player:SetAttribute("ReduceScares", player:GetAttribute("ReduceScares") ~= true)
 	refreshSoftButton()
 end)
+
+---------------------------------------------------------------- DIAGNÓSTICO (pon DEBUG_OVERLAY = false cuando todo funcione)
+local DEBUG_OVERLAY = true
+if DEBUG_OVERLAY then
+	local dbgGui = Instance.new("ScreenGui")
+	dbgGui.Name = "DebugHUD"
+	dbgGui.ResetOnSpawn = false
+	dbgGui.DisplayOrder = 60
+	pcall(function()
+		dbgGui.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets
+	end)
+	dbgGui.Parent = playerGui
+
+	local dbgLabel = Instance.new("TextLabel")
+	dbgLabel.Position = UDim2.fromScale(0.3, 0.02)
+	dbgLabel.Size = UDim2.fromScale(0.5, 0.34)
+	dbgLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+	dbgLabel.BackgroundTransparency = 0.35
+	dbgLabel.TextColor3 = Color3.fromRGB(120, 255, 140)
+	dbgLabel.TextXAlignment = Enum.TextXAlignment.Left
+	dbgLabel.TextYAlignment = Enum.TextYAlignment.Top
+	dbgLabel.TextWrapped = true
+	dbgLabel.Font = Enum.Font.Code
+	dbgLabel.TextSize = 13
+	dbgLabel.Text = "diagnóstico..."
+	dbgLabel.Parent = dbgGui
+
+	task.spawn(function()
+		while true do
+			task.wait(0.5)
+			local lines = {}
+			local char = player.Character
+			local hrp = char and char:FindFirstChild("HumanoidRootPart")
+			local ls = player:FindFirstChild("leaderstats")
+			local st = ls and ls:FindFirstChild("Etapa")
+			local cpFolder = workspace:FindFirstChild("Checkpoints")
+			lines[#lines + 1] = "Etapa (cliente): " .. (st and tostring(st.Value) or "sin datos")
+			lines[#lines + 1] = "MapReady: " .. tostring(workspace:GetAttribute("MapReady")) .. "  Streaming: " .. tostring(workspace.StreamingEnabled)
+			lines[#lines + 1] = "Checkpoints cargados aquí: " .. (cpFolder and tostring(#cpFolder:GetChildren()) or "sin carpeta")
+			if hrp then
+				local p = hrp.Position
+				lines[#lines + 1] = string.format("Pos: %.0f, %.0f, %.0f  anclado: %s", p.X, p.Y, p.Z, tostring(hrp.Anchored))
+				local params = RaycastParams.new()
+				params.FilterType = Enum.RaycastFilterType.Exclude
+				params.FilterDescendantsInstances = {char}
+				local hit = workspace:Raycast(p, Vector3.new(0, -300, 0), params)
+				if hit then
+					lines[#lines + 1] = string.format("Suelo debajo: %s a %.0f studs", hit.Instance.Name, p.Y - hit.Position.Y)
+				else
+					lines[#lines + 1] = "Suelo debajo: NINGUNO"
+				end
+			else
+				lines[#lines + 1] = "Personaje: no existe"
+			end
+			lines[#lines + 1] = "Servidor: " .. tostring(player:GetAttribute("DbgServer"))
+			dbgLabel.Text = table.concat(lines, "\n")
+		end
+	end)
+end
