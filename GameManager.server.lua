@@ -24,7 +24,7 @@ if not workspace:GetAttribute("MapReady") then
 	workspace:GetAttributeChangedSignal("MapReady"):Wait()
 end
 
-local STAGE_LENGTH = workspace:GetAttribute("StageLength") or 84
+local STAGE_LENGTH = workspace:GetAttribute("StageLength") or 140
 local TOTAL_STAGES = workspace:GetAttribute("TotalStages") or 150
 
 pcall(function()
@@ -52,9 +52,12 @@ local BOSS_RING_RANGE = 60
 local RING_DAMAGE = 50
 local RING_Y = 6.6
 local TOUCH_DEBOUNCE = 1.5
+local SCARE_COOLDOWN = 3 -- nunca dos screamers seguidos
+local FALL_DEATH_Y = -8 -- morir por debajo de esta altura cuenta como caída
 
 ---------------------------------------------------------------- ESTADO POR JUGADOR
 local touchDebounce = {}
+local scareDebounce = {}
 local hideCooldown = {}
 local cpDebounce = {}
 local hideState = {}      -- [player] = {locker, char, saved, token}
@@ -108,6 +111,19 @@ local function savePlayer(player)
 	end
 	activeSaves -= 1
 	return ok
+end
+
+---------------------------------------------------------------- SCREAMERS
+-- kind: "FALL" (meme al caer), "KILLER", "GHOST" o "BOSS" (terror al ser atrapado)
+local function sendScare(player, kind)
+	if scareDebounce[player] then
+		return
+	end
+	scareDebounce[player] = true
+	jumpscareEvent:FireClient(player, kind)
+	task.delay(SCARE_COOLDOWN, function()
+		scareDebounce[player] = nil
+	end)
 end
 
 ---------------------------------------------------------------- ARMARIOS
@@ -320,6 +336,9 @@ local function wireKillBrick(part)
 		end
 		local hum = char:FindFirstChildOfClass("Humanoid")
 		if hum and hum.Health > 0 then
+			if part.Name == "VoidKill" then
+				sendScare(player, "FALL")
+			end
 			hum.Health = 0
 		end
 	end)
@@ -476,7 +495,7 @@ local function spawnEntity(stage)
 			return
 		end
 		touchDebounce[player] = true
-		jumpscareEvent:FireClient(player, kind)
+		sendScare(player, kind)
 		hum.Health = 0
 		task.delay(TOUCH_DEBOUNCE, function()
 			touchDebounce[player] = nil
@@ -635,6 +654,18 @@ local function onPlayerAdded(player)
 		if ready[player] then
 			placeAtCheckpoint(player, char)
 		end
+		-- Respaldo: si muere muy por debajo del mapa, también cuenta como caída
+		task.spawn(function()
+			local hum = char:WaitForChild("Humanoid", 10)
+			local hrp = char:WaitForChild("HumanoidRootPart", 10)
+			if hum and hrp then
+				hum.Died:Once(function()
+					if hrp.Position.Y < FALL_DEATH_Y then
+						sendScare(player, "FALL")
+					end
+				end)
+			end
+		end)
 	end)
 
 	local ok, data = retry(function()
@@ -677,6 +708,7 @@ local function onPlayerRemoving(player)
 	savePlayer(player)
 
 	touchDebounce[player] = nil
+	scareDebounce[player] = nil
 	hideCooldown[player] = nil
 	cpDebounce[player] = nil
 	clearHideState(player)
