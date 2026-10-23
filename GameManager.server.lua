@@ -54,10 +54,16 @@ local RING_Y = 6.6
 local TOUCH_DEBOUNCE = 1.5
 local SCARE_COOLDOWN = 3 -- nunca dos screamers seguidos
 local FALL_DEATH_Y = -8 -- morir por debajo de esta altura cuenta como caída
+local LOOP_WINDOW = 12 -- caer dentro de estos segundos tras aparecer cuenta para el anti-bucle
+local LOOP_LIMIT = 3 -- caídas seguidas antes de devolver al jugador a la etapa 1
+local DEBUG_SERVER = true -- panel de diagnóstico (ponlo en false cuando todo funcione)
+local BUILD = "B3"
 
 ---------------------------------------------------------------- ESTADO POR JUGADOR
 local touchDebounce = {}
 local scareDebounce = {}
+local spawnClock = {}
+local fallLoop = {}
 local hideCooldown = {}
 local cpDebounce = {}
 local hideState = {}      -- [player] = {locker, char, saved, token}
@@ -663,6 +669,7 @@ local function onPlayerAdded(player)
 
 	-- Conectar ANTES de cargar datos para no perder el primer spawn
 	player.CharacterAdded:Connect(function(char)
+		spawnClock[player] = os.clock()
 		clearHideState(player)
 		-- Respaldo: si muere muy por debajo del mapa, también cuenta como caída
 		task.spawn(function()
@@ -672,6 +679,26 @@ local function onPlayerAdded(player)
 				hum.Died:Once(function()
 					if hrp.Position.Y < FALL_DEATH_Y then
 						sendScare(player, "FALL")
+						-- Anti-bucle: caer varias veces seguidas justo al aparecer = algo falla con el suelo
+						if os.clock() - (spawnClock[player] or 0) < LOOP_WINDOW then
+							fallLoop[player] = (fallLoop[player] or 0) + 1
+							if fallLoop[player] >= LOOP_LIMIT then
+								fallLoop[player] = 0
+								local lsX = player:FindFirstChild("leaderstats")
+								local stX = lsX and lsX:FindFirstChild("Etapa")
+								if stX and stX.Value > 1 then
+									stX.Value = 1
+									local note = ReplicatedStorage:FindFirstChild("ShopNotify")
+									if note then
+										note:FireClient(player, "⚠️ Volviste a la etapa 1 para salir de un bucle de caída")
+									end
+								end
+							end
+						else
+							fallLoop[player] = 0
+						end
+					else
+						fallLoop[player] = 0
 					end
 				end)
 			end
@@ -722,6 +749,8 @@ local function onPlayerRemoving(player)
 
 	touchDebounce[player] = nil
 	scareDebounce[player] = nil
+	spawnClock[player] = nil
+	fallLoop[player] = nil
 	hideCooldown[player] = nil
 	cpDebounce[player] = nil
 	clearHideState(player)
@@ -734,6 +763,31 @@ Players.PlayerAdded:Connect(onPlayerAdded)
 Players.PlayerRemoving:Connect(onPlayerRemoving)
 for _, plr in ipairs(Players:GetPlayers()) do
 	task.spawn(onPlayerAdded, plr)
+end
+
+-- Diagnóstico: cada segundo publica lo que ve el servidor (HorrorClient lo muestra en pantalla)
+if DEBUG_SERVER then
+	task.spawn(function()
+		while true do
+			task.wait(1)
+			for _, plr in ipairs(Players:GetPlayers()) do
+				local lsD = plr:FindFirstChild("leaderstats")
+				local stD = lsD and lsD:FindFirstChild("Etapa")
+				local charD = plr.Character
+				local hrpD = charD and charD:FindFirstChild("HumanoidRootPart")
+				local cpD = stD and checkpointsFolder:FindFirstChild(tostring(stD.Value))
+				plr:SetAttribute("DbgServer", string.format(
+					"%s etapa=%s cp=%s listo=%s datos=%s y=%s",
+					BUILD,
+					tostring(stD and stD.Value),
+					cpD and string.format("%.0f,%.0f,%.0f", cpD.Position.X, cpD.Position.Y, cpD.Position.Z) or "NO EXISTE",
+					tostring(ready[plr]),
+					tostring(canSave[plr]),
+					hrpD and string.format("%.0f", hrpD.Position.Y) or "-"
+				))
+			end
+		end
+	end)
 end
 
 -- Autoguardado periódico
