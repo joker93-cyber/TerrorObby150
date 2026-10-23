@@ -10,7 +10,8 @@ local killersFolder = workspace:WaitForChild("ActiveKillers")
 local playerGui = player:WaitForChild("PlayerGui")
 
 -- Imagen del meme que se ríe al caer. Pega un ID real de imagen: "rbxassetid://NUMERO".
--- Si lo dejas vacío se usa un emoji gigante 🤣 (funciona sin ningún recurso externo).
+local MEME_IMAGE_ID = "rbxassetid://6023426915"
+
 local MEME_IMAGE_ID = ""
 
 local DANGER_RANGE = 45
@@ -382,7 +383,7 @@ softBtn.Activated:Connect(function()
 end)
 
 ---------------------------------------------------------------- DIAGNÓSTICO (pon DEBUG_OVERLAY = false cuando todo funcione)
-local DEBUG_OVERLAY = true
+local DEBUG_OVERLAY = false
 if DEBUG_OVERLAY then
 	local dbgGui = Instance.new("ScreenGui")
 	dbgGui.Name = "DebugHUD"
