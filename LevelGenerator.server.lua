@@ -357,12 +357,19 @@ for stage = 1, TOTAL_STAGES do
 
 	-- 2. Contenido de la etapa
 	if isBossStage then
-		buildBossArena(ctx, currentZ)
+		local okBoss, errBoss = pcall(buildBossArena, ctx, currentZ)
+		if not okBoss then
+			warn("[LevelGenerator] Arena de jefe, etapa " .. stage .. ": " .. tostring(errBoss))
+		end
 	else
 		local names = pickModules(ctx)
 		for m = 1, MODULES_PER_STAGE do
 			local z0 = currentZ - CP_HALF - (m - 1) * MODULE_LEN
-			MODULES[names[m]](ctx, z0)
+			local okMod, errMod = pcall(MODULES[names[m]], ctx, z0)
+			if not okMod then
+				warn("[LevelGenerator] Módulo " .. names[m] .. ", etapa " .. stage .. ": " .. tostring(errMod))
+				floorPad(ctx, 0, z0 - MODULE_LEN / 2, 16, MODULE_LEN) -- suelo de emergencia
+			end
 		end
 	end
 
@@ -396,3 +403,4 @@ winLabel.Parent = winGui
 
 -- Señal para que GameManager sepa que el mapa está completo
 workspace:SetAttribute("MapReady", true)
+print("[LevelGenerator] Mapa listo: " .. TOTAL_STAGES .. " etapas")
