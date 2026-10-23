@@ -1,38 +1,72 @@
--- LevelGenerator.server.lua (Edición Tierra: Pasillos Reales, Trampas Móviles y Monstruos 3D)
+-- LevelGenerator.server.lua (Mundo Abierto Optimizado, Monstruos Avatar R6 y Súper Tienda)
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
 local RunService = game:GetService("RunService")
+local MarketplaceService = game:GetService("MarketplaceService")
+
+local VIP_GAMEPASS_ID = 2052196520 -- Tu Pase VIP oficial de 250 Robux
+local SKIP_STAGE_PRODUCT_ID = 0 -- Cambia el 0 si tienes un ID de producto para saltar nivel
+
+-- Función auxiliar para sonidos 3D optimizados
+local function add3DSound(parent, soundId, volume, pitch, looped, maxDist)
+	local s = Instance.new("Sound")
+	s.SoundId = "rbxassetid://" .. tostring(soundId)
+	s.Volume = volume or 1
+	s.PlaybackSpeed = pitch or 1
+	s.Looped = looped or false
+	s.RollOffMaxDistance = maxDist or 60
+	s.RollOffMinDistance = 8
+	s.RollOffMode = Enum.RollOffMode.Linear
+	s.Parent = parent
+	if looped then
+		s:Play()
+	end
+	return s
+end
 
 -- ==========================================
--- 1. CIELO TERRESTRE Y ATMÓSFERA (CERO ESPACIO EXTERIOR)
+-- 1. ATMÓSFERA ABIERTA EN LA TIERRA (CREPÚSCULO SANGRIENTO, CERO PAREDES)
 -- ==========================================
-local function applyEarthLighting()
+local function setupOpenEarthAtmosphere()
 	for _, child in ipairs(Lighting:GetChildren()) do
-		if child:IsA("Sky") and child.Name ~= "EarthHorrorSky" then
+		if child:IsA("Sky") or child:IsA("Atmosphere") or child:IsA("ColorCorrectionEffect") then
 			child:Destroy()
 		end
 	end
 
-	Lighting.Brightness = 2
-	Lighting.ClockTime = 0
-	Lighting.Ambient = Color3.fromRGB(75, 70, 75)
-	Lighting.OutdoorAmbient = Color3.fromRGB(65, 65, 75)
-	Lighting.FogStart = 45
-	Lighting.FogEnd = 260
-	Lighting.FogColor = Color3.fromRGB(28, 30, 35)
+	-- Hora crepuscular en la Tierra (17:45) para ver el horizonte, nubes y colores sin oscuridad espacial
+	Lighting.ClockTime = 17.75
+	Lighting.Brightness = 2.2
+	Lighting.Ambient = Color3.fromRGB(95, 80, 85)
+	Lighting.OutdoorAmbient = Color3.fromRGB(110, 90, 95)
+	Lighting.FogStart = 80
+	Lighting.FogEnd = 450
+	Lighting.FogColor = Color3.fromRGB(75, 45, 50)
 
-	if not Lighting:FindFirstChild("EarthHorrorSky") then
-		local sky = Instance.new("Sky")
-		sky.Name = "EarthHorrorSky"
-		sky.StarCount = 0
-		sky.CelestialBodiesShown = false
-		sky.Parent = Lighting
-	end
+	local sky = Instance.new("Sky")
+	sky.Name = "EarthTwilightSky"
+	sky.StarCount = 0
+	sky.CelestialBodiesShown = true
+	sky.Parent = Lighting
+
+	local atmo = Instance.new("Atmosphere")
+	atmo.Density = 0.35
+	atmo.Offset = 0.2
+	atmo.Color = Color3.fromRGB(110, 60, 65)
+	atmo.Decay = Color3.fromRGB(55, 30, 35)
+	atmo.Haze = 2.5
+	atmo.Parent = Lighting
+
+	local cc = Instance.new("ColorCorrectionEffect")
+	cc.Brightness = 0.04
+	cc.Contrast = 0.18
+	cc.Saturation = 0.1
+	cc.Parent = Lighting
 end
 
-applyEarthLighting()
-task.delay(2, applyEarthLighting)
+setupOpenEarthAtmosphere()
+task.delay(2, setupOpenEarthAtmosphere)
 
 -- ==========================================
 -- 2. CARPETAS DEL MUNDO
@@ -52,108 +86,86 @@ enemiesFolder.Name = "Enemies"
 enemiesFolder:ClearAllChildren()
 enemiesFolder.Parent = Workspace
 
--- ==========================================
--- 3. SALA DE INICIO EN LA TIERRA (BÚNKER DEL MANICOMIO)
--- ==========================================
-local function makeWall(size, pos, mat, col)
-	local w = Instance.new("Part")
-	w.Size = size
-	w.Position = pos
-	w.Anchored = true
-	w.Material = mat
-	w.Color = col
-	w.Parent = mapFolder
-	return w
+local function makePart(size, pos, mat, col, parent)
+	local p = Instance.new("Part")
+	p.Size = size
+	p.Position = pos
+	p.Anchored = true
+	p.Material = mat
+	p.Color = col
+	p.CastShadow = false -- Optimización clave para 60 FPS en iPhone
+	p.Parent = parent or mapFolder
+	return p
 end
 
-local safeLobby = makeWall(Vector3.new(36, 2, 36), Vector3.new(0, 0, 0), Enum.Material.Concrete, Color3.fromRGB(85, 85, 90))
+-- ==========================================
+-- 3. PLAZA DE INICIO AL AIRE LIBRE
+-- ==========================================
+local safeLobby = makePart(Vector3.new(42, 3, 42), Vector3.new(0, 0, 0), Enum.Material.Cobblestone, Color3.fromRGB(95, 95, 100))
 safeLobby.Name = "SafeStartLobby"
+
+-- Barandillas bajas decorativas (no tapan la cámara)
+makePart(Vector3.new(2, 3.5, 42), Vector3.new(-20, 3, 0), Enum.Material.Brick, Color3.fromRGB(60, 55, 60))
+makePart(Vector3.new(2, 3.5, 42), Vector3.new(20, 3, 0), Enum.Material.Brick, Color3.fromRGB(60, 55, 60))
+makePart(Vector3.new(42, 3.5, 2), Vector3.new(0, 3, 20), Enum.Material.Brick, Color3.fromRGB(60, 55, 60))
 
 local spawnLocation = Workspace:FindFirstChildOfClass("SpawnLocation") or Instance.new("SpawnLocation")
 spawnLocation.Name = "MainSpawn"
 spawnLocation.Size = Vector3.new(10, 1, 10)
-spawnLocation.Position = Vector3.new(0, 1.5, 8)
+spawnLocation.Position = Vector3.new(0, 2, 8)
 spawnLocation.Anchored = true
-spawnLocation.Material = Enum.Material.Slate
-spawnLocation.Color = Color3.fromRGB(50, 50, 55)
+spawnLocation.Material = Enum.Material.Neon
+spawnLocation.Color = Color3.fromRGB(200, 40, 40)
 spawnLocation.Parent = Workspace
 
--- Paredes y techo del Lobby
-makeWall(Vector3.new(2, 22, 36), Vector3.new(-18, 11, 0), Enum.Material.Brick, Color3.fromRGB(65, 60, 60))
-makeWall(Vector3.new(2, 22, 36), Vector3.new(18, 11, 0), Enum.Material.Brick, Color3.fromRGB(65, 60, 60))
-makeWall(Vector3.new(38, 22, 2), Vector3.new(0, 11, 18), Enum.Material.Brick, Color3.fromRGB(65, 60, 60))
-makeWall(Vector3.new(38, 2, 36), Vector3.new(0, 22, 0), Enum.Material.Concrete, Color3.fromRGB(45, 45, 50))
-
-local lobbyLightPart = makeWall(Vector3.new(6, 0.5, 6), Vector3.new(0, 20.8, 0), Enum.Material.Neon, Color3.fromRGB(255, 235, 190))
-local lobbyLight = Instance.new("PointLight")
-lobbyLight.Range = 55
-lobbyLight.Brightness = 2.5
-lobbyLight.Color = Color3.fromRGB(255, 235, 190)
-lobbyLight.Parent = lobbyLightPart
-
 -- ==========================================
--- 4. DEFINICIÓN DE LOS 5 BIOMAS TERRESTRES
+-- 4. DEFINICIÓN DE LOS 5 BIOMAS ABIERTOS
 -- ==========================================
 local BIOMES = {
 	[1] = {
-		Name = "El Manicomio Abandonado",
-		Indoor = true,
-		WallMat = Enum.Material.Concrete,
-		WallColor = Color3.fromRGB(95, 100, 100),
+		Name = "Ruinas del Manicomio",
 		FloorMat = Enum.Material.Slate,
-		FloorColor = Color3.fromRGB(65, 70, 75),
-		PitColor = Color3.fromRGB(90, 15, 15),
-		PitMat = Enum.Material.Granite,
-		LightColor = Color3.fromRGB(220, 240, 255),
-		MonsterColor = Color3.fromRGB(200, 20, 20)
+		FloorColor = Color3.fromRGB(90, 95, 105),
+		AccentColor = Color3.fromRGB(160, 35, 35),
+		MonsterShirt = Color3.fromRGB(120, 25, 25),
+		MonsterFace = "rbxassetid://7074764", -- Cara terrorífica clásica
+		LightColor = Color3.fromRGB(255, 180, 140)
 	},
 	[2] = {
-		Name = "Las Alcantarillas Tóxicas",
-		Indoor = true,
-		WallMat = Enum.Material.Brick,
-		WallColor = Color3.fromRGB(55, 65, 55),
+		Name = "Puentes Tóxicos",
 		FloorMat = Enum.Material.CorrodedMetal,
-		FloorColor = Color3.fromRGB(75, 65, 55),
-		PitColor = Color3.fromRGB(50, 200, 40),
-		PitMat = Enum.Material.Neon,
-		LightColor = Color3.fromRGB(160, 255, 160),
-		MonsterColor = Color3.fromRGB(40, 220, 50)
+		FloorColor = Color3.fromRGB(70, 85, 70),
+		AccentColor = Color3.fromRGB(60, 230, 50),
+		MonsterShirt = Color3.fromRGB(35, 110, 45),
+		MonsterFace = "rbxassetid://173789324", -- Rostro mutante
+		LightColor = Color3.fromRGB(150, 255, 150)
 	},
 	[3] = {
-		Name = "La Mansión Sangrienta",
-		Indoor = true,
-		WallMat = Enum.Material.WoodPlanks,
-		WallColor = Color3.fromRGB(70, 40, 30),
-		FloorMat = Enum.Material.Cobblestone,
-		FloorColor = Color3.fromRGB(90, 30, 30),
-		PitColor = Color3.fromRGB(140, 0, 20),
-		PitMat = Enum.Material.Neon,
-		LightColor = Color3.fromRGB(255, 190, 130),
-		MonsterColor = Color3.fromRGB(220, 15, 40)
+		Name = "Jardines Sangrientos",
+		FloorMat = Enum.Material.WoodPlanks,
+		FloorColor = Color3.fromRGB(95, 55, 45),
+		AccentColor = Color3.fromRGB(220, 25, 55),
+		MonsterShirt = Color3.fromRGB(70, 15, 25),
+		MonsterFace = "rbxassetid://7074764",
+		LightColor = Color3.fromRGB(255, 140, 140)
 	},
 	[4] = {
-		Name = "El Bosque Maldito",
-		Indoor = false,
-		WallMat = Enum.Material.Slate,
-		WallColor = Color3.fromRGB(45, 55, 40),
+		Name = "Cañón del Bosque Maldito",
 		FloorMat = Enum.Material.Grass,
-		FloorColor = Color3.fromRGB(45, 65, 40),
-		PitColor = Color3.fromRGB(35, 45, 30),
-		PitMat = Enum.Material.Mud,
-		LightColor = Color3.fromRGB(180, 200, 255),
-		MonsterColor = Color3.fromRGB(150, 40, 230)
+		FloorColor = Color3.fromRGB(55, 80, 50),
+		AccentColor = Color3.fromRGB(160, 50, 240),
+		MonsterShirt = Color3.fromRGB(50, 25, 80),
+		MonsterFace = "rbxassetid://173789324",
+		LightColor = Color3.fromRGB(200, 160, 255)
 	},
 	[5] = {
-		Name = "Las Ruinas del Purgatorio",
-		Indoor = false,
-		WallMat = Enum.Material.Basalt,
-		WallColor = Color3.fromRGB(40, 35, 35),
-		FloorMat = Enum.Material.CrackedLava,
-		FloorColor = Color3.fromRGB(65, 35, 30),
-		PitColor = Color3.fromRGB(255, 75, 0),
-		PitMat = Enum.Material.Neon,
-		LightColor = Color3.fromRGB(255, 130, 60),
-		MonsterColor = Color3.fromRGB(255, 60, 0)
+		Name = "Volcán del Purgatorio",
+		FloorMat = Enum.Material.Basalt,
+		FloorColor = Color3.fromRGB(55, 45, 50),
+		AccentColor = Color3.fromRGB(255, 85, 0),
+		MonsterShirt = Color3.fromRGB(180, 40, 0),
+		MonsterFace = "rbxassetid://7074764",
+		LightColor = Color3.fromRGB(255, 130, 50)
 	}
 }
 
@@ -163,22 +175,22 @@ local function getBiome(stage)
 end
 
 -- ==========================================
--- 5. SISTEMAS DINÁMICOS (TRAMPAS, PUERTAS, ARMARIOS Y MONSTRUOS 3D)
+-- 5. MONSTRUOS CALIDAD AVATAR (HUMANOID R6 + CARA DE TERROR)
 -- ==========================================
 local movingHazards = {}
-local flickeringLights = {}
 local activeEnemies = {}
 
 local function createLocker(position)
-	local locker = makeWall(Vector3.new(4.5, 8.5, 4), position + Vector3.new(0, 4.25, 0), Enum.Material.Metal, Color3.fromRGB(50, 60, 70))
+	local locker = makePart(Vector3.new(4.5, 8.5, 4), position + Vector3.new(0, 4.25, 0), Enum.Material.Metal, Color3.fromRGB(55, 65, 75))
 	locker.Name = "HidingLocker"
+	makePart(Vector3.new(3.5, 1.5, 0.3), locker.Position + Vector3.new(0, 2, 2), Enum.Material.Neon, Color3.fromRGB(0, 220, 255))
 
-	makeWall(Vector3.new(3.5, 1.5, 0.2), locker.Position + Vector3.new(0, 2, 2), Enum.Material.Metal, Color3.fromRGB(25, 30, 35))
+	local doorSound = add3DSound(locker, 9114074523, 0.9, 0.9, false, 45)
 
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.ActionText = "Esconderse / Salir"
-	prompt.ObjectText = "Armario de Seguridad"
-	prompt.HoldDuration = 0.15
+	prompt.ObjectText = "Cabina de Refugio"
+	prompt.HoldDuration = 0.1
 	prompt.MaxActivationDistance = 10
 	prompt.Parent = locker
 
@@ -189,6 +201,7 @@ local function createLocker(position)
 		local hum = char:FindFirstChildOfClass("Humanoid")
 		if not hrp or not hum or hum.Health <= 0 then return end
 
+		doorSound:Play()
 		local isHiding = char:GetAttribute("IsHiding")
 		if not isHiding then
 			char:SetAttribute("IsHiding", true)
@@ -216,164 +229,172 @@ local function createLocker(position)
 	end)
 end
 
-local function createMonster3D(centerPos, patrolRadius, isBoss, biome, speed)
-	local scale = isBoss and 2.2 or 1.15
-	local root = Instance.new("Part")
-	root.Name = isBoss and "BossMonster" or "StalkerMonster"
-	root.Size = Vector3.new(3 * scale, 6 * scale, 2 * scale)
-	root.Position = centerPos + Vector3.new(0, (3 * scale) + 1, 0)
-	root.Anchored = true
-	root.CanCollide = false
-	root.Material = Enum.Material.Slate
-	root.Color = Color3.fromRGB(20, 20, 25)
-	root.Parent = enemiesFolder
+-- Constructor de Monstruo con calidad de Personaje R6 y Cara de Terror
+local function createAvatarMonster(centerPos, patrolRadius, isBoss, biome, speed)
+	local s = isBoss and 2.1 or 1.15
+	local npcModel = Instance.new("Model")
+	npcModel.Name = isBoss and "💀 JEFE DEL BIOMA 💀" or "🔪 ASESINO"
+	npcModel.Parent = enemiesFolder
 
-	local head = Instance.new("Part")
-	head.Size = Vector3.new(2.2 * scale, 2.2 * scale, 2.2 * scale)
-	head.Anchored = true
+	-- Humanoid para que Roblox suavice los bordes como un jugador real
+	local hum = Instance.new("Humanoid")
+	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+	hum.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	hum.Parent = npcModel
+
+	-- Torso
+	local torso = makePart(Vector3.new(2 * s, 2 * s, 1 * s), centerPos + Vector3.new(0, 3 * s, 0), Enum.Material.SmoothPlastic, biome.MonsterShirt, npcModel)
+	torso.Name = "Torso"
+	torso.CanCollide = false
+	npcModel.PrimaryPart = torso
+
+	-- Cabeza con forma real de Avatar Roblox (SpecialMesh Head)
+	local head = makePart(Vector3.new(2 * s, 1 * s, 1 * s), torso.Position + Vector3.new(0, 1.5 * s, 0), Enum.Material.SmoothPlastic, Color3.fromRGB(235, 225, 220), npcModel)
+	head.Name = "Head"
 	head.CanCollide = false
-	head.Material = Enum.Material.SmoothPlastic
-	head.Color = Color3.fromRGB(220, 210, 200)
-	head.Parent = root
 
-	local eyeLeft = Instance.new("Part")
-	eyeLeft.Size = Vector3.new(0.4 * scale, 0.3 * scale, 0.2 * scale)
-	eyeLeft.Anchored = true
-	eyeLeft.CanCollide = false
-	eyeLeft.Material = Enum.Material.Neon
-	eyeLeft.Color = biome.MonsterColor
-	eyeLeft.Parent = root
+	local headMesh = Instance.new("SpecialMesh")
+	headMesh.MeshType = Enum.MeshType.Head
+	headMesh.Scale = Vector3.new(1.25, 1.25, 1.25)
+	headMesh.Parent = head
 
-	local eyeRight = eyeLeft:Clone()
-	eyeRight.Parent = root
+	-- Textura de Cara de Terror en la parte frontal de la cabeza
+	local faceDecal = Instance.new("Decal")
+	faceDecal.Name = "face"
+	faceDecal.Face = Enum.NormalId.Front
+	faceDecal.Texture = biome.MonsterFace
+	faceDecal.Parent = head
 
-	local blade = Instance.new("Part")
-	blade.Size = Vector3.new(0.6 * scale, 4.5 * scale, 1.2 * scale)
-	blade.Anchored = true
-	blade.CanCollide = false
-	blade.Material = Enum.Material.Neon
-	blade.Color = biome.MonsterColor
-	blade.Parent = root
+	-- Ojos brillantes de neón sobresalientes para que den miedo de lejos
+	local eyeL = makePart(Vector3.new(0.28 * s, 0.22 * s, 0.2 * s), head.Position, Enum.Material.Neon, biome.AccentColor, npcModel)
+	eyeL.CanCollide = false
+	local eyeR = eyeL:Clone()
+	eyeR.Parent = npcModel
 
-	local auraLight = Instance.new("PointLight")
-	auraLight.Color = biome.MonsterColor
-	auraLight.Range = isBoss and 45 or 26
-	auraLight.Brightness = 3.5
-	auraLight.Parent = root
+	-- Extremidades articuladas (Brazos y Piernas igual a un jugador R6)
+	local armL = makePart(Vector3.new(1 * s, 2 * s, 1 * s), torso.Position, Enum.Material.SmoothPlastic, Color3.fromRGB(215, 205, 200), npcModel)
+	armL.Name = "Left Arm"
+	armL.CanCollide = false
 
-	local bg = Instance.new("BillboardGui")
-	bg.Size = UDim2.new(0, 130, 0, 36)
-	bg.StudsOffset = Vector3.new(0, (4 * scale) + 1.5, 0)
-	bg.MaxDistance = 75
-	bg.Parent = root
+	local armR = armL:Clone()
+	armR.Name = "Right Arm"
+	armR.Parent = npcModel
 
-	local title = Instance.new("TextLabel")
-	title.Size = UDim2.new(1, 0, 1, 0)
-	title.BackgroundTransparency = 1
-	title.Text = isBoss and "💀 JEFE DEL BIOMA 💀" or "🔪 ASESINO"
-	title.TextColor3 = Color3.fromRGB(255, 45, 45)
-	title.TextStrokeTransparency = 0
-	title.TextScaled = true
-	title.Font = Enum.Font.GothamBlack
-	title.Parent = bg
+	local legL = makePart(Vector3.new(1 * s, 2 * s, 1 * s), torso.Position, Enum.Material.SmoothPlastic, Color3.fromRGB(30, 30, 35), npcModel)
+	legL.Name = "Left Leg"
+	legL.CanCollide = false
 
-	local function onTouch(hit)
+	local legR = legL:Clone()
+	legR.Name = "Right Leg"
+	legR.Parent = npcModel
+
+	-- Machete / Guadaña sangrienta en la mano derecha
+	local weapon = makePart(Vector3.new(0.35 * s, 3.8 * s, 0.9 * s), torso.Position, Enum.Material.Neon, biome.AccentColor, npcModel)
+	weapon.Name = "BloodyBlade"
+	weapon.CanCollide = false
+
+	-- Luz de aura terrorífica
+	local light = Instance.new("PointLight")
+	light.Color = biome.AccentColor
+	light.Range = isBoss and 38 or 22
+	light.Brightness = 2.5
+	light.Parent = torso
+
+	-- Sonido 3D del monstruo
+	add3DSound(torso, 9114397505, isBoss and 1.0 or 0.7, isBoss and 0.45 or 0.65, true, 65)
+	local roarSound = add3DSound(torso, 9114221735, 1.2, isBoss and 0.55 or 0.75, false, 80)
+
+	-- Daño al tocar al jugador (respeta el Escudo y el Armario)
+	local function onHit(hit)
 		local char = hit.Parent
-		local hum = char and char:FindFirstChildOfClass("Humanoid")
-		if hum and not char:GetAttribute("IsHiding") then
-			hum.Health = 0
+		local pHum = char and char:FindFirstChildOfClass("Humanoid")
+		if pHum and pHum.Health > 0 and not char:GetAttribute("IsHiding") and not torso:GetAttribute("Stunned") then
+			if char:GetAttribute("HasShield") then
+				char:SetAttribute("HasShield", false)
+				local ff = char:FindFirstChildOfClass("ForceField")
+				if ff then ff:Destroy() end
+				torso:SetAttribute("Stunned", true)
+				task.delay(3, function()
+					if torso then torso:SetAttribute("Stunned", false) end
+				end)
+				return
+			end
+			roarSound:Play()
+			pHum.Health = 0
 		end
 	end
-	root.Touched:Connect(onTouch)
-	blade.Touched:Connect(onTouch)
+
+	torso.Touched:Connect(onHit)
+	weapon.Touched:Connect(onHit)
 
 	table.insert(activeEnemies, {
-		Root = root,
+		Model = npcModel,
+		Torso = torso,
 		Head = head,
-		EyeL = eyeLeft,
-		EyeR = eyeRight,
-		Blade = blade,
-		Scale = scale,
-		Origin = root.Position,
+		EyeL = eyeL,
+		EyeR = eyeR,
+		ArmL = armL,
+		ArmR = armR,
+		LegL = legL,
+		LegR = legR,
+		Weapon = weapon,
+		Roar = roarSound,
+		Scale = s,
+		Origin = torso.Position,
 		Radius = patrolRadius,
 		IsBoss = isBoss,
 		Speed = speed or (isBoss and 15.5 or 13),
-		LastWave = tick()
+		LastWave = tick(),
+		LastRoar = tick()
 	})
 end
 
-local function buildStageEnvironment(stage, zStart, length, biome)
-	local zCenter = zStart - (length / 2)
+-- ==========================================
+-- 6. GENERACIÓN DE LOS 150 NIVELES ABIERTOS Y OPTIMIZADOS
+-- ==========================================
+local currentZ = -20
+local STAGE_LENGTH = 70
 
-	-- Suelo mortal de fosa terrestre debajo del nivel
-	local pit = makeWall(
-		Vector3.new(38, 2, length),
-		Vector3.new(0, -10, zCenter),
-		biome.PitMat,
-		biome.PitColor
-	)
-	pit.Touched:Connect(function(hit)
+-- Gran río de lava/abismo terrestre continuo debajo de todo el mapa (1 sola pieza cada 15 etapas para máxima optimización)
+for chunk = 1, 10 do
+	local chunkLen = STAGE_LENGTH * 15
+	local zCenter = -20 - ((chunk - 0.5) * chunkLen)
+	local b = getBiome((chunk - 1) * 15 + 1)
+	local abyss = makePart(Vector3.new(160, 2, chunkLen), Vector3.new(0, -18, zCenter), Enum.Material.Neon, b.AccentColor)
+	abyss.Transparency = 0.25
+	abyss.Touched:Connect(function(hit)
 		local hum = hit.Parent and hit.Parent:FindFirstChildOfClass("Humanoid")
-		if hum then
-			hum.Health = 0
-		end
+		if hum then hum.Health = 0 end
 	end)
-
-	if biome.Indoor then
-		makeWall(Vector3.new(2, 26, length), Vector3.new(-18, 2, zCenter), biome.WallMat, biome.WallColor)
-		makeWall(Vector3.new(2, 26, length), Vector3.new(18, 2, zCenter), biome.WallMat, biome.WallColor)
-		makeWall(Vector3.new(38, 2, length), Vector3.new(0, 15, zCenter), Enum.Material.Concrete, Color3.fromRGB(35, 35, 40))
-
-		local lamp = makeWall(Vector3.new(4, 0.5, 4), Vector3.new(0, 13.8, zCenter), Enum.Material.Neon, biome.LightColor)
-		local pLight = Instance.new("PointLight")
-		pLight.Range = 55
-		pLight.Brightness = 2.4
-		pLight.Color = biome.LightColor
-		pLight.Parent = lamp
-
-		if stage % 2 == 0 then
-			table.insert(flickeringLights, {Lamp = lamp, Light = pLight, BaseBrightness = 2.4})
-		end
-	else
-		makeWall(Vector3.new(6, 18, length), Vector3.new(-20, -2, zCenter), biome.WallMat, biome.WallColor)
-		makeWall(Vector3.new(6, 18, length), Vector3.new(20, -2, zCenter), biome.WallMat, biome.WallColor)
-
-		for t = 1, 2 do
-			local tz = zStart - (t * (length / 3))
-			local side = (t % 2 == 0) and 14 or -14
-			makeWall(Vector3.new(2.5, 18, 2.5), Vector3.new(side, 0, tz), Enum.Material.Wood, Color3.fromRGB(45, 35, 30))
-			local lantern = makeWall(Vector3.new(1.5, 1.5, 1.5), Vector3.new(side * 0.7, 7, tz), Enum.Material.Neon, biome.LightColor)
-			local lLight = Instance.new("PointLight")
-			lLight.Range = 50
-			lLight.Brightness = 2.2
-			lLight.Color = biome.LightColor
-			lLight.Parent = lantern
-		end
-	end
 end
-
--- ==========================================
--- 6. GENERACIÓN DE LOS 150 NIVELES CON DESAFÍOS REALES
--- ==========================================
-local currentZ = -18
-local STAGE_LENGTH = 72
 
 for stage = 1, 150 do
 	local biome = getBiome(stage)
-	buildStageEnvironment(stage, currentZ, STAGE_LENGTH, biome)
+	local zCenter = currentZ - (STAGE_LENGTH / 2)
 
-	local cp = makeWall(Vector3.new(18, 2, 14), Vector3.new(0, 0, currentZ), biome.FloorMat, biome.FloorColor)
+	-- Faroles terrestres en los bordes cada 2 etapas (Sin paredes ni techos para vista abierta)
+	if stage % 2 == 1 then
+		local side = (stage % 4 == 1) and -11 or 11
+		makePart(Vector3.new(1.2, 10, 1.2), Vector3.new(side, 5, currentZ), Enum.Material.Metal, Color3.fromRGB(40, 40, 45))
+		local lantern = makePart(Vector3.new(2, 2, 2), Vector3.new(side, 10.5, currentZ), Enum.Material.Neon, biome.LightColor)
+		local pl = Instance.new("PointLight")
+		pl.Range = 45
+		pl.Brightness = 2
+		pl.Color = biome.LightColor
+		pl.Parent = lantern
+	end
+
+	-- Plataforma de Checkpoint abierta
+	local cp = makePart(Vector3.new(18, 2, 14), Vector3.new(0, 0, currentZ), biome.FloorMat, biome.FloorColor, checkpointsFolder)
 	cp.Name = tostring(stage)
-	cp.Parent = checkpointsFolder
 
-	local neonPad = makeWall(Vector3.new(6, 0.3, 6), cp.Position + Vector3.new(0, 1.1, 0), Enum.Material.Neon, Color3.fromRGB(0, 220, 110))
+	local neonPad = makePart(Vector3.new(6, 0.3, 6), cp.Position + Vector3.new(0, 1.1, 0), Enum.Material.Neon, Color3.fromRGB(0, 230, 115), cp)
 	neonPad.CanCollide = false
-	neonPad.Parent = cp
 
 	local bg = Instance.new("BillboardGui")
-	bg.Size = UDim2.new(0, 160, 0, 55)
-	bg.StudsOffset = Vector3.new(0, 5.5, 0)
-	bg.MaxDistance = 90
+	bg.Size = UDim2.new(0, 160, 0, 50)
+	bg.StudsOffset = Vector3.new(0, 5, 0)
+	bg.MaxDistance = 85
 	bg.Parent = cp
 
 	local label = Instance.new("TextLabel")
@@ -391,58 +412,43 @@ for stage = 1, 150 do
 	local challengeType = (stage - 1) % 5
 
 	if stage % 30 == 0 then
-		-- Arena de Jefe Final del Bioma
-		local arena = makeWall(
-			Vector3.new(30, 2, STAGE_LENGTH - 14),
-			Vector3.new(0, 0, currentZ - (STAGE_LENGTH / 2)),
-			biome.FloorMat,
-			biome.FloorColor
-		)
-		createLocker(arena.Position + Vector3.new(11, 1, 10))
-		createLocker(arena.Position + Vector3.new(-11, 1, -10))
-		createMonster3D(arena.Position, 12, true, biome, 16)
+		-- Arena abierta de Jefe Final del Bioma
+		local arena = makePart(Vector3.new(32, 2, STAGE_LENGTH - 14), Vector3.new(0, 0, zCenter), biome.FloorMat, biome.FloorColor)
+		createLocker(arena.Position + Vector3.new(12, 1, 10))
+		createLocker(arena.Position + Vector3.new(-12, 1, -10))
+		createAvatarMonster(arena.Position, 12, true, biome, 16)
 
 	elseif challengeType == 0 then
-		-- Desafío 1: Pasillo del Asesino (Persecución + Escondite desde el Nivel 1)
-		local corridor = makeWall(
-			Vector3.new(14, 2, STAGE_LENGTH - 14),
-			Vector3.new(0, 0, currentZ - (STAGE_LENGTH / 2)),
-			biome.FloorMat,
-			biome.FloorColor
-		)
-		createLocker(corridor.Position + Vector3.new(4.5, 1, 0))
-		makeWall(Vector3.new(6, 4, 1.5), corridor.Position + Vector3.new(-3, 3, 12), Enum.Material.Metal, Color3.fromRGB(90, 25, 25))
-		makeWall(Vector3.new(6, 4, 1.5), corridor.Position + Vector3.new(3, 3, -12), Enum.Material.Metal, Color3.fromRGB(90, 25, 25))
-		createMonster3D(corridor.Position, 5, false, biome, 13.5)
+		-- Desafío 1: Puente del Asesino con barricadas bajas
+		local bridge = makePart(Vector3.new(14, 2, STAGE_LENGTH - 14), Vector3.new(0, 0, zCenter), biome.FloorMat, biome.FloorColor)
+		createLocker(bridge.Position + Vector3.new(4.5, 1, 0))
+		makePart(Vector3.new(5.5, 3.5, 1.5), bridge.Position + Vector3.new(-3, 2.7, 12), Enum.Material.Metal, biome.AccentColor)
+		makePart(Vector3.new(5.5, 3.5, 1.5), bridge.Position + Vector3.new(3, 2.7, -12), Enum.Material.Metal, biome.AccentColor)
+		createAvatarMonster(bridge.Position, 5, false, biome, 13.5)
 
 	elseif challengeType == 1 then
-		-- Desafío 2: Guillotinas y Sierras Oscilantes
-		makeWall(
-			Vector3.new(8, 2, STAGE_LENGTH - 14),
-			Vector3.new(0, 0, currentZ - (STAGE_LENGTH / 2)),
-			biome.FloorMat,
-			biome.FloorColor
-		)
+		-- Desafío 2: Péndulos y Sierras Giratorias Abiertas
+		makePart(Vector3.new(8.5, 2, STAGE_LENGTH - 14), Vector3.new(0, 0, zCenter), biome.FloorMat, biome.FloorColor)
 
 		for s = 1, 3 do
-			local sawZ = currentZ - 14 - (s * 14)
-			local saw = makeWall(Vector3.new(5, 5, 1), Vector3.new(0, 3.5, sawZ), Enum.Material.Neon, Color3.fromRGB(255, 30, 30))
+			local sawZ = currentZ - 13 - (s * 13)
+			local saw = makePart(Vector3.new(5, 5, 0.8), Vector3.new(0, 3.5, sawZ), Enum.Material.Neon, biome.AccentColor)
 			saw.CanCollide = false
 			saw.Touched:Connect(function(hit)
 				local hum = hit.Parent and hit.Parent:FindFirstChildOfClass("Humanoid")
-				if hum then hum.Health = 0 end
+				if hum and not hit.Parent:GetAttribute("HasShield") then hum.Health = 0 end
 			end)
 			table.insert(movingHazards, {
 				Part = saw,
 				Origin = saw.Position,
 				Amplitude = 6.5,
-				Speed = 2.5 + (s * 0.5),
+				Speed = 2.5 + (s * 0.45),
 				Phase = s * 1.2
 			})
 		end
 
 	elseif challengeType == 2 then
-		-- Desafío 3: Puente de Tablas Podridas
+		-- Desafío 3: Puente Colgante de Tablas Podridas
 		local rows = 4
 		local spacing = (STAGE_LENGTH - 14) / (rows + 1)
 
@@ -450,8 +456,8 @@ for stage = 1, 150 do
 			local rowZ = currentZ - 7 - (r * spacing)
 			local leftIsSafe = ((stage + r) % 2 == 0)
 
-			local leftPad = makeWall(Vector3.new(6.5, 1.2, 8), Vector3.new(-4.5, 0, rowZ), Enum.Material.WoodPlanks, leftIsSafe and Color3.fromRGB(110, 75, 50) or Color3.fromRGB(65, 40, 35))
-			local rightPad = makeWall(Vector3.new(6.5, 1.2, 8), Vector3.new(4.5, 0, rowZ), Enum.Material.WoodPlanks, (not leftIsSafe) and Color3.fromRGB(110, 75, 50) or Color3.fromRGB(65, 40, 35))
+			local leftPad = makePart(Vector3.new(6.5, 1.2, 8), Vector3.new(-4.5, 0, rowZ), Enum.Material.WoodPlanks, leftIsSafe and Color3.fromRGB(120, 80, 55) or Color3.fromRGB(70, 42, 35))
+			local rightPad = makePart(Vector3.new(6.5, 1.2, 8), Vector3.new(4.5, 0, rowZ), Enum.Material.WoodPlanks, (not leftIsSafe) and Color3.fromRGB(120, 80, 55) or Color3.fromRGB(70, 42, 35))
 
 			local fakePad = leftIsSafe and rightPad or leftPad
 			fakePad.Touched:Connect(function(hit)
@@ -470,242 +476,29 @@ for stage = 1, 150 do
 		end
 
 	elseif challengeType == 3 then
-		-- Desafío 4: Puerta Cerrada con Válvula + Monstruo Acechando
-		local hall = makeWall(
-			Vector3.new(16, 2, STAGE_LENGTH - 14),
-			Vector3.new(0, 0, currentZ - (STAGE_LENGTH / 2)),
-			biome.FloorMat,
-			biome.FloorColor
-		)
-
-		local gate = makeWall(Vector3.new(16, 12, 1.5), Vector3.new(0, 7, currentZ - STAGE_LENGTH + 10), Enum.Material.CorrodedMetal, Color3.fromRGB(60, 50, 50))
-		local valve = makeWall(Vector3.new(2.5, 5, 2.5), hall.Position + Vector3.new(-5.5, 3.5, 4), Enum.Material.Neon, Color3.fromRGB(220, 40, 40))
+		-- Desafío 4: Reja de Hierro + Válvula + Asesino R6
+		local hall = makePart(Vector3.new(16, 2, STAGE_LENGTH - 14), Vector3.new(0, 0, zCenter), biome.FloorMat, biome.FloorColor)
+		local gate = makePart(Vector3.new(16, 10, 1.2), Vector3.new(0, 6, currentZ - STAGE_LENGTH + 10), Enum.Material.CorrodedMetal, Color3.fromRGB(60, 50, 50))
+		local valve = makePart(Vector3.new(2.5, 4.5, 2.5), hall.Position + Vector3.new(-5.5, 3.2, 4), Enum.Material.Neon, Color3.fromRGB(230, 40, 40))
 
 		local gatePrompt = Instance.new("ProximityPrompt")
-		gatePrompt.ActionText = "Girar Válvula (Abrir Reja)"
-		gatePrompt.ObjectText = "Mecanismo de Escape"
-		gatePrompt.HoldDuration = 0.5
+		gatePrompt.ActionText = "Girar Válvula (Abrir Paso)"
+		gatePrompt.ObjectText = "Mecanismo Antiguo"
+		gatePrompt.HoldDuration = 0.4
 		gatePrompt.MaxActivationDistance = 10
 		gatePrompt.Parent = valve
 
 		gatePrompt.Triggered:Connect(function()
 			gate.CanCollide = false
 			gate.Transparency = 0.75
-			valve.Color = Color3.fromRGB(40, 220, 80)
+			valve.Color = Color3.fromRGB(40, 230, 80)
 			task.delay(6, function()
 				if gate and gate.Parent then
 					gate.CanCollide = true
 					gate.Transparency = 0
-					valve.Color = Color3.fromRGB(220, 40, 40)
+					valve.Color = Color3.fromRGB(230, 40, 40)
 				end
 			end)
 		end)
 
-		createLocker(hall.Position + Vector3.new(5.5, 1, -4))
-		createMonster3D(hall.Position + Vector3.new(0, 0, -6), 5, false, biome, 13)
-
-	else
-		-- Desafío 5: Salto de Vigas con Trampas Móviles
-		for i = 1, 4 do
-			local stepZ = currentZ - 8 - (i * 11.5)
-			local xOff = (i % 2 == 0) and 3.5 or -3.5
-			local pad = makeWall(Vector3.new(8, 1.5, 8.5), Vector3.new(xOff, 0, stepZ), biome.FloorMat, biome.FloorColor)
-
-			local laser = makeWall(Vector3.new(8, 0.8, 1), pad.Position + Vector3.new(0, 1.2, 0), Enum.Material.Neon, biome.MonsterColor)
-			laser.CanCollide = false
-			laser.Touched:Connect(function(hit)
-				local hum = hit.Parent and hit.Parent:FindFirstChildOfClass("Humanoid")
-				if hum then hum.Health = 0 end
-			end)
-			table.insert(movingHazards, {
-				Part = laser,
-				Origin = laser.Position,
-				Amplitude = 3,
-				Speed = 2,
-				Phase = i,
-				MoveZ = true
-			})
-		end
-	end
-
-	currentZ = currentZ - STAGE_LENGTH
-
-	if stage % 35 == 0 then
-		task.wait()
-	end
-end
-
--- ==========================================
--- 7. SANTUARIO DE VICTORIA EN EL NIVEL 150
--- ==========================================
-local winPlatform = makeWall(Vector3.new(34, 2, 34), Vector3.new(0, 0, currentZ), Enum.Material.Neon, Color3.fromRGB(255, 215, 0))
-winPlatform.Name = "VictoryPlatform"
-
--- ==========================================
--- 8. GESTIÓN DE JUGADORES Y CHECKPOINTS
--- ==========================================
-local function teleportToStage(player, character)
-	task.wait(0.1)
-	local hrp = character:WaitForChild("HumanoidRootPart", 5)
-	if not hrp then return end
-
-	local stageVal = player:FindFirstChild("leaderstats") and player.leaderstats:FindFirstChild("Stage")
-	local stageNum = (stageVal and stageVal.Value) or 1
-	local cp = checkpointsFolder:FindFirstChild(tostring(stageNum)) or checkpointsFolder:FindFirstChild("1")
-
-	if cp then
-		hrp.CFrame = cp.CFrame + Vector3.new(0, 4.5, 0)
-	else
-		hrp.CFrame = CFrame.new(0, 5, 0)
-	end
-end
-
-local function setupPlayer(player)
-	local ls = player:FindFirstChild("leaderstats")
-	if not ls then
-		ls = Instance.new("Folder")
-		ls.Name = "leaderstats"
-		ls.Parent = player
-	end
-
-	local stage = ls:FindFirstChild("Stage")
-	if not stage then
-		stage = Instance.new("IntValue")
-		stage.Name = "Stage"
-		stage.Value = 1
-		stage.Parent = ls
-	end
-
-	player.CharacterAdded:Connect(function(char)
-		teleportToStage(player, char)
-	end)
-
-	if player.Character then
-		teleportToStage(player, player.Character)
-	end
-end
-
-Players.PlayerAdded:Connect(setupPlayer)
-for _, player in ipairs(Players:GetPlayers()) do
-	task.spawn(setupPlayer, player)
-end
-
-for _, cp in ipairs(checkpointsFolder:GetChildren()) do
-	if cp:IsA("BasePart") then
-		local stageNum = tonumber(cp.Name)
-		if stageNum then
-			cp.Touched:Connect(function(hit)
-				local char = hit.Parent
-				local player = Players:GetPlayerFromCharacter(char)
-				if player and player:FindFirstChild("leaderstats") then
-					local stageVal = player.leaderstats:FindFirstChild("Stage")
-					if stageVal and stageNum > stageVal.Value and stageNum <= stageVal.Value + 2 then
-						stageVal.Value = stageNum
-					end
-				end
-			end)
-		end
-	end
-end
-
--- ==========================================
--- 9. BUCLE MAESTRO: IA DE MONSTRUOS 3D, SIERRAS Y LUCES
--- ==========================================
-RunService.Heartbeat:Connect(function(dt)
-	local now = tick()
-
-	for _, h in ipairs(movingHazards) do
-		if h.Part and h.Part.Parent then
-			local offset = math.sin(now * h.Speed + h.Phase) * h.Amplitude
-			if h.MoveZ then
-				h.Part.Position = h.Origin + Vector3.new(0, 0, offset)
-			else
-				h.Part.Position = h.Origin + Vector3.new(offset, 0, 0)
-			end
-		end
-	end
-
-	if #flickeringLights > 0 and math.random() < 0.08 then
-		local pick = flickeringLights[math.random(1, #flickeringLights)]
-		if pick and pick.Light and pick.Lamp then
-			local off = (math.random() < 0.35)
-			pick.Light.Brightness = off and 0.4 or pick.BaseBrightness
-			pick.Lamp.Transparency = off and 0.6 or 0
-		end
-	end
-
-	for _, m in ipairs(activeEnemies) do
-		local root = m.Root
-		if root and root.Parent then
-			local targetPos = nil
-			local shortestDist = 34
-
-			for _, player in ipairs(Players:GetPlayers()) do
-				local char = player.Character
-				local hrp = char and char:FindFirstChild("HumanoidRootPart")
-				local hum = char and char:FindFirstChildOfClass("Humanoid")
-				if hrp and hum and hum.Health > 0 and not char:GetAttribute("IsHiding") then
-					local dist = (hrp.Position - m.Origin).Magnitude
-					if dist < shortestDist then
-						shortestDist = dist
-						targetPos = hrp.Position
-					end
-				end
-			end
-
-			local newPos = root.Position
-			local lookAt = newPos + Vector3.new(0, 0, 1)
-
-			if targetPos then
-				local flatTarget = Vector3.new(targetPos.X, root.Position.Y, targetPos.Z)
-				local dir = (flatTarget - root.Position)
-				if dir.Magnitude > 0.5 then
-					newPos = root.Position + dir.Unit * m.Speed * dt
-					lookAt = flatTarget
-				end
-			else
-				local zWalk = math.cos(now * 1.8) * (m.Radius * 2)
-				local xWalk = math.sin(now * 2.5) * m.Radius
-				newPos = m.Origin + Vector3.new(xWalk, 0, zWalk)
-				lookAt = newPos + Vector3.new(0, 0, (math.sin(now * 1.8) >= 0 and -1 or 1))
-			end
-
-			local cf = CFrame.lookAt(newPos, lookAt)
-			root.CFrame = cf
-
-			local s = m.Scale
-			m.Head.CFrame = cf * CFrame.new(0, 3.8 * s, 0)
-			m.EyeL.CFrame = cf * CFrame.new(-0.5 * s, 4 * s, -1.1 * s)
-			m.EyeR.CFrame = cf * CFrame.new(0.5 * s, 4 * s, -1.1 * s)
-			local swing = math.sin(now * 8) * 0.6
-			m.Blade.CFrame = cf * CFrame.new(1.8 * s, 1 * s, -1.2 * s) * CFrame.Angles(swing, 0, 0)
-
-			if m.IsBoss and (now - m.LastWave > 4) then
-				m.LastWave = now
-				local wave = Instance.new("Part")
-				wave.Size = Vector3.new(28, 1.4, 2)
-				wave.Position = Vector3.new(0, 1.2, root.Position.Z)
-				wave.Anchored = true
-				wave.CanCollide = false
-				wave.Material = Enum.Material.Neon
-				wave.Color = Color3.fromRGB(255, 50, 0)
-				wave.Parent = enemiesFolder
-
-				wave.Touched:Connect(function(hit)
-					local hum = hit.Parent and hit.Parent:FindFirstChildOfClass("Humanoid")
-					if hum and not hit.Parent:GetAttribute("IsHiding") then
-						hum.Health = 0
-					end
-				end)
-
-				task.spawn(function()
-					for i = 1, 28 do
-						wave.Position = wave.Position + Vector3.new(0, 0, 1.3)
-						task.wait(0.03)
-					end
-					wave:Destroy()
-				end)
-			end
-		end
-	end
-end)
+		createLocker(hall.Position +
