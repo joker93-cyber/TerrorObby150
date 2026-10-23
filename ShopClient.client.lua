@@ -133,7 +133,7 @@ local function refreshLabels()
 	local kind = inputKind()
 	local isVip = player:GetAttribute("IsVIP") == true
 
-	toggleBtn.Text = (expanded and "🛒 TIENDA ▾" or "🛒 TIENDA ▸") .. HINTS.toggle[kind]
+	toggleBtn.Text = (expanded and "🛒 TIENDA (−)" or "🛒 TIENDA (+)") .. HINTS.toggle[kind]
 	if getStage() >= totalStages() then
 		skipBtn.Text = "⏭ Etapa MÁX"
 	else
