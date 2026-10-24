@@ -1,12 +1,12 @@
 -- CombatAndAbilityClient.client.lua
--- Ubicación en Roblox: StarterPlayer.StarterPlayerScripts.CombatAndAbilityClient
--- Interfaz de Salud, Zona Segura, Ataque Cuerpo a Cuerpo [E] y Barra de Habilidades [1-4, Z]
--- optimizada para iPhone/Móvil, PC y Consola sin duplicarse al reaparecer.
+-- Ubicación: StarterPlayer.StarterPlayerScripts.CombatAndAbilityClient
+-- Incluye HUD de Salud, Zona Segura, Barra de Vida de Jefes Cercanos y Habilidades.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 
 local localPlayer = Players.LocalPlayer
 local playerGui = localPlayer:WaitForChild("PlayerGui")
@@ -27,7 +27,7 @@ combatGui.Name = "TerrorCombatHUD"
 combatGui.ResetOnSpawn = false
 combatGui.Parent = playerGui
 
--- 1. Barra de Salud e Indicador de Zona Segura / PvP (Arriba a la izquierda)
+-- 1. Barra de Salud del Jugador y Zona Segura
 local statusFrame = Instance.new("Frame")
 statusFrame.Name = "HealthAndZoneFrame"
 statusFrame.Size = UDim2.fromOffset(220, 54)
@@ -78,7 +78,42 @@ zoneLabel.TextSize = 12
 zoneLabel.Text = "🛡️ ZONA SEGURA"
 zoneLabel.Parent = statusFrame
 
--- 2. Barra Inferior de Ataque y Habilidades (Adaptada para iPhone y PC)
+-- 2. Barra de Vida de Jefe Dinámica (Aparece al acercarte a un Jefe de Bioma)
+local bossFrame = Instance.new("Frame")
+bossFrame.Name = "BossHealthBar"
+bossFrame.Size = UDim2.fromOffset(360, 44)
+bossFrame.Position = UDim2.new(0.5, -180, 0, 105)
+bossFrame.BackgroundColor3 = Color3.fromRGB(25, 10, 15)
+bossFrame.BackgroundTransparency = 0.15
+bossFrame.Visible = false
+bossFrame.Parent = combatGui
+
+local bossCorner = Instance.new("UICorner")
+bossCorner.CornerRadius = UDim.new(0, 10)
+bossCorner.Parent = bossFrame
+
+local bossTitle = Instance.new("TextLabel")
+bossTitle.Size = UDim2.new(1, -16, 0, 20)
+bossTitle.Position = UDim2.fromOffset(8, 2)
+bossTitle.BackgroundTransparency = 1
+bossTitle.TextColor3 = Color3.fromRGB(255, 90, 90)
+bossTitle.Font = Enum.Font.GothamBlack
+bossTitle.TextSize = 13
+bossTitle.Text = "💀 JEFE DE BIOMA"
+bossTitle.Parent = bossFrame
+
+local bossBarBg = Instance.new("Frame")
+bossBarBg.Size = UDim2.new(1, -20, 0, 14)
+bossBarBg.Position = UDim2.fromOffset(10, 24)
+bossBarBg.BackgroundColor3 = Color3.fromRGB(60, 15, 20)
+bossBarBg.Parent = bossFrame
+
+local bossBarFill = Instance.new("Frame")
+bossBarFill.Size = UDim2.fromScale(1, 1)
+bossBarFill.BackgroundColor3 = Color3.fromRGB(220, 25, 45)
+bossBarFill.Parent = bossBarBg
+
+-- 3. Barra Inferior de Ataque y Habilidades
 local bottomBar = Instance.new("Frame")
 bottomBar.Name = "SkillsBar"
 bottomBar.Size = UDim2.fromOffset(420, 64)
@@ -115,13 +150,11 @@ local function createSkillButton(id, labelText, bgColor)
 	return btn
 end
 
--- Botón de Ataque Cuerpo a Cuerpo
 local attackBtn = createSkillButton("Attack", "⚔️ Atacar\n[E]", Color3.fromRGB(165, 35, 35))
 attackBtn.Activated:Connect(function()
 	basicAttackEvent:FireServer()
 end)
 
--- Botones de las 5 Habilidades
 local keyLabels = {"[1]", "[2]", "[3]", "[4]", "[Z]"}
 for index, abilityId in ipairs(AbilityConfig.OrderedList) do
 	local cfg = AbilityConfig.Abilities[abilityId]
@@ -134,7 +167,6 @@ for index, abilityId in ipairs(AbilityConfig.OrderedList) do
 	end)
 end
 
--- 3. Atajos de Teclado (PC) y Mando (Consola)
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
 	if input.KeyCode == Enum.KeyCode.E or input.KeyCode == Enum.KeyCode.ButtonR2 then
@@ -151,7 +183,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	end
 end)
 
--- 4. Recepción de Confirmación de Cooldowns y Efectos de Impacto
 combatFeedbackEvent.OnClientEvent:Connect(function(feedbackType, arg1, arg2)
 	if feedbackType == "AbilityAccepted" then
 		local abilityId = arg1
@@ -165,13 +196,12 @@ combatFeedbackEvent.OnClientEvent:Connect(function(feedbackType, arg1, arg2)
 	end
 end)
 
--- 5. Actualización de Barra de Salud, Zona Segura y Contadores de Recarga
 RunService.RenderStepped:Connect(function()
 	local now = os.clock()
-
-	-- Salud del jugador
 	local char = localPlayer.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
 	local hum = char and char:FindFirstChildOfClass("Humanoid")
+
 	if hum then
 		local hp = math.max(0, math.floor(hum.Health))
 		local maxHp = math.max(1, math.floor(hum.MaxHealth))
@@ -179,7 +209,6 @@ RunService.RenderStepped:Connect(function()
 		healthText.Text = string.format("❤️ %d / %d", hp, maxHp)
 	end
 
-	-- Estado de Zona Segura / PvP
 	local inSafe = localPlayer:GetAttribute("InSafeZone")
 	if inSafe == false then
 		zoneLabel.Text = "⚔️ ZONA PVP ACTIVA"
@@ -189,7 +218,33 @@ RunService.RenderStepped:Connect(function()
 		zoneLabel.TextColor3 = Color3.fromRGB(110, 230, 130)
 	end
 
-	-- Contadores de enfriamiento en botones de habilidades
+	-- Detectar Jefe o Monstruo cercano para mostrar su barra de vida
+	local monstersFolder = Workspace:FindFirstChild("Monsters")
+	local closestBoss = nil
+	local closestDist = 75
+	if hrp and monstersFolder then
+		for _, m in ipairs(monstersFolder:GetChildren()) do
+			local mRoot = m.PrimaryPart or m:FindFirstChild("HumanoidRootPart")
+			local mHum = m:FindFirstChildOfClass("Humanoid")
+			if mRoot and mHum and mHum.Health > 0 then
+				local d = (mRoot.Position - hrp.Position).Magnitude
+				if d < closestDist then
+					closestDist = d
+					closestBoss = m
+				end
+			end
+		end
+	end
+
+	if closestBoss then
+		local mHum = closestBoss:FindFirstChildOfClass("Humanoid")
+		bossFrame.Visible = true
+		bossTitle.Text = string.format("💀 %s (%d / %d HP)", closestBoss.Name, math.floor(mHum.Health), math.floor(mHum.MaxHealth))
+		bossBarFill.Size = UDim2.fromScale(math.clamp(mHum.Health / math.max(1, mHum.MaxHealth), 0, 1), 1)
+	else
+		bossFrame.Visible = false
+	end
+
 	for abilityId, info in pairs(SkillButtons) do
 		local endTime = ClientCooldownEnds[abilityId] or 0
 		local remaining = endTime - now
