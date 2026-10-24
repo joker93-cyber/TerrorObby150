@@ -1,7 +1,6 @@
 -- ProceduralModels.lua
--- Ubicación en Roblox: ReplicatedStorage.ProceduralModels
--- Genera modelos procedurales 3D sin depender de Meshes externos privados:
--- Avenida del Cine, carpas de otoño, armarios de escondite, toboganes, escalinatas y monstruos R6.
+-- Ubicación: ReplicatedStorage.ProceduralModels
+-- Modelos 3D procedurales 100% compatibles con materiales nativos de Part.
 
 local ProceduralModels = {}
 
@@ -23,12 +22,10 @@ local function createPart(props)
 	return part
 end
 
--- Crea la fachada del Cine en la Avenida de Otoño (Zona Inicial)
 function ProceduralModels.CreateCinemaFacade(originCFrame, parent)
 	local model = Instance.new("Model")
 	model.Name = "CinemaFacade"
 
-	-- Edificio principal del cine
 	createPart({
 		Name = "CinemaWall",
 		Size = Vector3.new(36, 22, 4),
@@ -38,7 +35,6 @@ function ProceduralModels.CreateCinemaFacade(originCFrame, parent)
 		Parent = model
 	})
 
-	-- Marquesina luminosa de neón
 	local marquee = createPart({
 		Name = "Marquee",
 		Size = Vector3.new(26, 5, 3),
@@ -58,10 +54,9 @@ function ProceduralModels.CreateCinemaFacade(originCFrame, parent)
 	label.Text = "🎬 CINE TERROR 150 🎃"
 	label.TextColor3 = Color3.fromRGB(255, 240, 200)
 	label.TextScaled = true
-	label.Font = Enum.Font.Creepster
+	label.Font = Enum.Font.GothamBlack
 	label.Parent = gui
 
-	-- Carpas de otoño laterales
 	for _, side in ipairs({-14, 14}) do
 		createPart({
 			Name = "AutumnTent",
@@ -77,7 +72,6 @@ function ProceduralModels.CreateCinemaFacade(originCFrame, parent)
 	return model
 end
 
--- Crea un Checkpoint numerado con cartel luminoso
 function ProceduralModels.CreateCheckpoint(stageNumber, cframe, biomeColor, parent)
 	local pad = createPart({
 		Name = "Checkpoint_" .. tostring(stageNumber),
@@ -89,7 +83,7 @@ function ProceduralModels.CreateCheckpoint(stageNumber, cframe, biomeColor, pare
 	})
 	pad:SetAttribute("StageNumber", stageNumber)
 
-	local neonBorder = createPart({
+	createPart({
 		Name = "NeonIndicator",
 		Size = Vector3.new(10.4, 0.3, 10.4),
 		CFrame = cframe * CFrame.new(0, 0.5, 0),
@@ -120,7 +114,6 @@ function ProceduralModels.CreateCheckpoint(stageNumber, cframe, biomeColor, pare
 	return pad
 end
 
--- Crea un Armario funcional para esconderse de los monstruos
 function ProceduralModels.CreateHidingCloset(cframe, parent)
 	local closet = Instance.new("Model")
 	closet.Name = "HidingCloset"
@@ -134,7 +127,7 @@ function ProceduralModels.CreateHidingCloset(cframe, parent)
 		Parent = closet
 	})
 
-	local doorSlot = createPart({
+	createPart({
 		Name = "ClosetVents",
 		Size = Vector3.new(3.5, 1.5, 0.2),
 		CFrame = cframe * CFrame.new(0, 6, 1.75),
@@ -157,7 +150,6 @@ function ProceduralModels.CreateHidingCloset(cframe, parent)
 	return closet
 end
 
--- Crea un Tobogán extremo
 function ProceduralModels.CreateSlide(startCFrame, length, parent)
 	local model = Instance.new("Model")
 	model.Name = "HorrorSlide"
@@ -165,7 +157,7 @@ function ProceduralModels.CreateSlide(startCFrame, length, parent)
 	local angle = math.rad(-25)
 	local slideCFrame = startCFrame * CFrame.Angles(angle, 0, 0) * CFrame.new(0, 0, -length / 2)
 
-	local ramp = createPart({
+	createPart({
 		Name = "SlideRamp",
 		Size = Vector3.new(8, 1, length),
 		CFrame = slideCFrame,
@@ -174,7 +166,6 @@ function ProceduralModels.CreateSlide(startCFrame, length, parent)
 		Parent = model
 	})
 
-	-- Bordes laterales para evitar caídas accidentales injustas
 	for _, offset in ipairs({-4.2, 4.2}) do
 		createPart({
 			Name = "SlideRail",
@@ -190,7 +181,6 @@ function ProceduralModels.CreateSlide(startCFrame, length, parent)
 	return model
 end
 
--- Crea una Escalinata empinada
 function ProceduralModels.CreateStaircase(startCFrame, stepsCount, parent)
 	local model = Instance.new("Model")
 	model.Name = "TerrorStaircase"
@@ -210,7 +200,6 @@ function ProceduralModels.CreateStaircase(startCFrame, stepsCount, parent)
 	return model
 end
 
--- Crea un Monstruo R6 con ojos rojos brillantes y cara de terror
 function ProceduralModels.CreateR6Monster(name, spawnPos, minZ, maxZ, walkSpeed, parent)
 	local monster = Instance.new("Model")
 	monster.Name = name or "StalkerR6"
@@ -252,7 +241,6 @@ function ProceduralModels.CreateR6Monster(name, spawnPos, minZ, maxZ, walkSpeed,
 		Parent = monster
 	})
 
-	-- Ojos rojos luminosos de terror
 	for _, xOffset in ipairs({-0.35, 0.35}) do
 		local eye = createPart({
 			Name = "HorrorEye",
@@ -270,7 +258,6 @@ function ProceduralModels.CreateR6Monster(name, spawnPos, minZ, maxZ, walkSpeed,
 		weldEye.Parent = head
 	end
 
-	-- Soldaduras R6 básicas para estabilidad física
 	local weldTorso = Instance.new("WeldConstraint")
 	weldTorso.Part0 = hrp
 	weldTorso.Part1 = torso
