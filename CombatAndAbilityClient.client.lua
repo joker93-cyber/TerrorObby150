@@ -1,12 +1,14 @@
 -- CombatAndAbilityClient.client.lua
 -- Ubicación: StarterPlayer.StarterPlayerScripts.CombatAndAbilityClient
--- Incluye HUD de Salud, Zona Segura, Barra de Vida de Jefes Cercanos y Habilidades.
+-- Ejecuta la animación de espadazo en el cliente, sacudida de cámara en impactos,
+-- cambio dinámico de cielo/ambiente por Bioma y HUD de Jefes y Habilidades.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
 
 local localPlayer = Players.LocalPlayer
 local playerGui = localPlayer:WaitForChild("PlayerGui")
@@ -27,7 +29,7 @@ combatGui.Name = "TerrorCombatHUD"
 combatGui.ResetOnSpawn = false
 combatGui.Parent = playerGui
 
--- 1. Barra de Salud del Jugador y Zona Segura
+-- 1. Barra de Salud y Zona
 local statusFrame = Instance.new("Frame")
 statusFrame.Name = "HealthAndZoneFrame"
 statusFrame.Size = UDim2.fromOffset(220, 54)
@@ -78,7 +80,7 @@ zoneLabel.TextSize = 12
 zoneLabel.Text = "🛡️ ZONA SEGURA"
 zoneLabel.Parent = statusFrame
 
--- 2. Barra de Vida de Jefe Dinámica (Aparece al acercarte a un Jefe de Bioma)
+-- 2. Barra de Vida de Criatura / Jefe Activo
 local bossFrame = Instance.new("Frame")
 bossFrame.Name = "BossHealthBar"
 bossFrame.Size = UDim2.fromOffset(360, 44)
@@ -96,10 +98,10 @@ local bossTitle = Instance.new("TextLabel")
 bossTitle.Size = UDim2.new(1, -16, 0, 20)
 bossTitle.Position = UDim2.fromOffset(8, 2)
 bossTitle.BackgroundTransparency = 1
-bossTitle.TextColor3 = Color3.fromRGB(255, 90, 90)
+bossTitle.TextColor3 = Color3.fromRGB(255, 110, 110)
 bossTitle.Font = Enum.Font.GothamBlack
 bossTitle.TextSize = 13
-bossTitle.Text = "💀 JEFE DE BIOMA"
+bossTitle.Text = "💀 CRIATURA"
 bossTitle.Parent = bossFrame
 
 local bossBarBg = Instance.new("Frame")
@@ -110,10 +112,23 @@ bossBarBg.Parent = bossFrame
 
 local bossBarFill = Instance.new("Frame")
 bossBarFill.Size = UDim2.fromScale(1, 1)
-bossBarFill.BackgroundColor3 = Color3.fromRGB(220, 25, 45)
+bossBarFill.BackgroundColor3 = Color3.fromRGB(235, 35, 55)
 bossBarFill.Parent = bossBarBg
 
--- 3. Barra Inferior de Ataque y Habilidades
+-- 3. Animación local de espadazo al atacar
+local function playLocalSlashMove()
+	local char = localPlayer.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if not hum then return end
+
+	-- Impulso corto de ataque hacia adelante
+	local hrp = char:FindFirstChild("HumanoidRootPart")
+	if hrp then
+		hrp.AssemblyLinearVelocity = hrp.CFrame.LookVector * 22 + Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
+	end
+end
+
+-- 4. Barra Inferior de Ataque y Poderes
 local bottomBar = Instance.new("Frame")
 bottomBar.Name = "SkillsBar"
 bottomBar.Size = UDim2.fromOffset(420, 64)
@@ -134,7 +149,7 @@ local SkillButtons = {}
 local function createSkillButton(id, labelText, bgColor)
 	local btn = Instance.new("TextButton")
 	btn.Name = "Btn_" .. id
-	btn.Size = UDim2.fromOffset(62, 56)
+	btn.Size = UDim2.fromOffset(64, 58)
 	btn.BackgroundColor3 = bgColor
 	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
 	btn.Font = Enum.Font.GothamBold
@@ -150,8 +165,9 @@ local function createSkillButton(id, labelText, bgColor)
 	return btn
 end
 
-local attackBtn = createSkillButton("Attack", "⚔️ Atacar\n[E]", Color3.fromRGB(165, 35, 35))
+local attackBtn = createSkillButton("Attack", "⚔️ Atacar\n[E]", Color3.fromRGB(185, 35, 40))
 attackBtn.Activated:Connect(function()
+	playLocalSlashMove()
 	basicAttackEvent:FireServer()
 end)
 
@@ -159,7 +175,7 @@ local keyLabels = {"[1]", "[2]", "[3]", "[4]", "[Z]"}
 for index, abilityId in ipairs(AbilityConfig.OrderedList) do
 	local cfg = AbilityConfig.Abilities[abilityId]
 	local keyStr = keyLabels[index] or ""
-	local btn = createSkillButton(abilityId, cfg.Name .. "\n" .. keyStr, Color3.fromRGB(35, 45, 70))
+	local btn = createSkillButton(abilityId, cfg.Name .. "\n" .. keyStr, Color3.fromRGB(35, 50, 80))
 	SkillButtons[abilityId] = {Button = btn, DefaultText = cfg.Name .. "\n" .. keyStr}
 
 	btn.Activated:Connect(function()
@@ -170,6 +186,7 @@ end
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
 	if input.KeyCode == Enum.KeyCode.E or input.KeyCode == Enum.KeyCode.ButtonR2 then
+		playLocalSlashMove()
 		basicAttackEvent:FireServer()
 		return
 	end
@@ -189,12 +206,22 @@ combatFeedbackEvent.OnClientEvent:Connect(function(feedbackType, arg1, arg2)
 		local duration = tonumber(arg2) or 5
 		ClientCooldownEnds[abilityId] = os.clock() + duration
 	elseif feedbackType == "HitPlayer" or feedbackType == "HitMonster" then
-		attackBtn.BackgroundColor3 = Color3.fromRGB(255, 190, 40)
+		attackBtn.BackgroundColor3 = Color3.fromRGB(255, 210, 50)
 		task.delay(0.15, function()
-			attackBtn.BackgroundColor3 = Color3.fromRGB(165, 35, 35)
+			attackBtn.BackgroundColor3 = Color3.fromRGB(185, 35, 40)
 		end)
 	end
 end)
+
+-- 5. Cambio dinámico de Ambiente Visual a medida que avanzas de Etapa
+local lastAppliedBiomeIndex = 0
+local BIOME_ATMOSPHERES = {
+	[1] = {Clock = 17.6, Ambient = Color3.fromRGB(150, 130, 145), Atmo = Color3.fromRGB(210, 125, 85)},
+	[2] = {Clock = 18.2, Ambient = Color3.fromRGB(120, 155, 135), Atmo = Color3.fromRGB(85, 195, 130)},
+	[3] = {Clock = 19.0, Ambient = Color3.fromRGB(145, 120, 165), Atmo = Color3.fromRGB(165, 95, 220)},
+	[4] = {Clock = 16.8, Ambient = Color3.fromRGB(130, 155, 175), Atmo = Color3.fromRGB(95, 190, 240)},
+	[5] = {Clock = 18.0, Ambient = Color3.fromRGB(170, 120, 120), Atmo = Color3.fromRGB(235, 80, 65)}
+}
 
 RunService.RenderStepped:Connect(function()
 	local now = os.clock()
@@ -211,17 +238,36 @@ RunService.RenderStepped:Connect(function()
 
 	local inSafe = localPlayer:GetAttribute("InSafeZone")
 	if inSafe == false then
-		zoneLabel.Text = "⚔️ ZONA PVP ACTIVA"
-		zoneLabel.TextColor3 = Color3.fromRGB(255, 85, 85)
+		zoneLabel.Text = "⚔️ ZONA DE BATALLA"
+		zoneLabel.TextColor3 = Color3.fromRGB(255, 95, 95)
 	else
 		zoneLabel.Text = "🛡️ ZONA SEGURA"
 		zoneLabel.TextColor3 = Color3.fromRGB(110, 230, 130)
 	end
 
-	-- Detectar Jefe o Monstruo cercano para mostrar su barra de vida
+	-- Cambiar atmósfera según la etapa actual del jugador
+	local leaderstats = localPlayer:FindFirstChild("leaderstats")
+	local stageVal = leaderstats and leaderstats:FindFirstChild("Stage")
+	if stageVal then
+		local biomeIdx = math.clamp(math.ceil(stageVal.Value / 30), 1, 5)
+		if biomeIdx ~= lastAppliedBiomeIndex then
+			lastAppliedBiomeIndex = biomeIdx
+			local preset = BIOME_ATMOSPHERES[biomeIdx]
+			if preset then
+				Lighting.ClockTime = preset.Clock
+				Lighting.Ambient = preset.Ambient
+				local atmo = Lighting:FindFirstChildOfClass("Atmosphere")
+				if atmo then
+					atmo.Color = preset.Atmo
+				end
+			end
+		end
+	end
+
+	-- Mostrar barra de vida de la criatura más cercana
 	local monstersFolder = Workspace:FindFirstChild("Monsters")
-	local closestBoss = nil
-	local closestDist = 75
+	local closestMonster = nil
+	local closestDist = 65
 	if hrp and monstersFolder then
 		for _, m in ipairs(monstersFolder:GetChildren()) do
 			local mRoot = m.PrimaryPart or m:FindFirstChild("HumanoidRootPart")
@@ -230,16 +276,16 @@ RunService.RenderStepped:Connect(function()
 				local d = (mRoot.Position - hrp.Position).Magnitude
 				if d < closestDist then
 					closestDist = d
-					closestBoss = m
+					closestMonster = m
 				end
 			end
 		end
 	end
 
-	if closestBoss then
-		local mHum = closestBoss:FindFirstChildOfClass("Humanoid")
+	if closestMonster then
+		local mHum = closestMonster:FindFirstChildOfClass("Humanoid")
 		bossFrame.Visible = true
-		bossTitle.Text = string.format("💀 %s (%d / %d HP)", closestBoss.Name, math.floor(mHum.Health), math.floor(mHum.MaxHealth))
+		bossTitle.Text = string.format("💀 %s (%d / %d HP)", closestMonster.Name, math.floor(mHum.Health), math.floor(mHum.MaxHealth))
 		bossBarFill.Size = UDim2.fromScale(math.clamp(mHum.Health / math.max(1, mHum.MaxHealth), 0, 1), 1)
 	else
 		bossFrame.Visible = false
@@ -253,7 +299,7 @@ RunService.RenderStepped:Connect(function()
 			info.Button.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
 		else
 			info.Button.Text = info.DefaultText
-			info.Button.BackgroundColor3 = Color3.fromRGB(35, 45, 70)
+			info.Button.BackgroundColor3 = Color3.fromRGB(35, 50, 80)
 		end
 	end
 end)
