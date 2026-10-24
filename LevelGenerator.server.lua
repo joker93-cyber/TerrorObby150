@@ -1,18 +1,18 @@
 -- LevelGenerator.server.lua
 -- Ubicación: ServerScriptService.LevelGenerator
--- Genera etapas largas con 10 diseños distintos, Grandes Arenas de Batalla con manadas de criaturas,
--- iluminación clara y agradable, y un Valle Escénico completo debajo del mapa.
+-- Genera etapas con gran verticalidad (subidas, bajadas, saltos, trampolines, toboganes,
+-- láseres giratorios, plataformas móviles) + Tormenta de Rayos y Truenos en vivo.
 
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Lighting = game:GetService("Lighting")
+local Debris = game:GetService("Debris")
 
--- 1. PISO DE APARICIÓN INMEDIATO
 local mainSpawn = Workspace:FindFirstChild("MainSafetySpawn")
 if not mainSpawn then
 	mainSpawn = Instance.new("SpawnLocation")
 	mainSpawn.Name = "MainSafetySpawn"
-	mainSpawn.Size = Vector3.new(58, 2, 58)
+	mainSpawn.Size = Vector3.new(54, 2, 54)
 	mainSpawn.CFrame = CFrame.new(0, 9, 0)
 	mainSpawn.Color = Color3.fromRGB(110, 88, 95)
 	mainSpawn.Material = Enum.Material.Cobblestone
@@ -23,7 +23,6 @@ if not mainSpawn then
 	mainSpawn.Parent = Workspace
 end
 
--- 2. ILUMINACIÓN CLARA Y AGRADABLE DE ATARDECER DE HALLOWEEN
 pcall(function()
 	Lighting.ClockTime = 17.6
 	Lighting.Brightness = 3.2
@@ -63,7 +62,6 @@ local closetsFolder = Workspace:FindFirstChild("HidingClosets") or Instance.new(
 closetsFolder.Name = "HidingClosets"
 closetsFolder.Parent = Workspace
 
--- 5 Biomas bien diferenciados y luminosos
 local BIOMES = {
 	{
 		Name = "Avenida de Otoño",
@@ -72,7 +70,7 @@ local BIOMES = {
 		ValleyColor = Color3.fromRGB(85, 55, 40),
 		NeonColor = Color3.fromRGB(255, 150, 40),
 		Mat = Enum.Material.Cobblestone,
-		BossName = "JEFE: El Carnicero del Cine"
+		BossName = "JEFE: Carnicero del Cine"
 	},
 	{
 		Name = "Fortaleza Esmeralda",
@@ -81,7 +79,7 @@ local BIOMES = {
 		ValleyColor = Color3.fromRGB(45, 75, 55),
 		NeonColor = Color3.fromRGB(70, 255, 130),
 		Mat = Enum.Material.Slate,
-		BossName = "JEFE: El Guardián Tóxico"
+		BossName = "JEFE: Guardián Tóxico"
 	},
 	{
 		Name = "Bosque de las Brujas",
@@ -90,7 +88,7 @@ local BIOMES = {
 		ValleyColor = Color3.fromRGB(70, 45, 90),
 		NeonColor = Color3.fromRGB(205, 85, 255),
 		Mat = Enum.Material.Grass,
-		BossName = "JEFE: Señor de las Calabazas"
+		BossName = "JEFE: Señor Calabaza"
 	},
 	{
 		Name = "Ciudadela Cibernética",
@@ -99,7 +97,7 @@ local BIOMES = {
 		ValleyColor = Color3.fromRGB(55, 75, 95),
 		NeonColor = Color3.fromRGB(60, 210, 255),
 		Mat = Enum.Material.DiamondPlate,
-		BossName = "JEFE: Titán Mecánico 120"
+		BossName = "JEFE: Titán Mecánico"
 	},
 	{
 		Name = "Volcán del Rey Demonio",
@@ -108,7 +106,7 @@ local BIOMES = {
 		ValleyColor = Color3.fromRGB(95, 30, 30),
 		NeonColor = Color3.fromRGB(255, 60, 40),
 		Mat = Enum.Material.Brick,
-		BossName = "JEFE FINAL: Rey del Abismo"
+		BossName = "JEFE FINAL: Rey Demonio"
 	}
 }
 
@@ -141,14 +139,14 @@ end
 local function spawnMonsterPack(centerPos, count, stage, parent)
 	for i = 1, count do
 		local variant = VARIANTS[((stage + i) % #VARIANTS) + 1]
-		local speed = (variant == "Brute") and 14.5 or ((variant == "Wraith") and 18.5 or 16.5)
+		local speed = (variant == "Brute") and 15 or ((variant == "Wraith") and 19 or 17)
 		local prefix = (variant == "Brute") and "Carnicero" or ((variant == "Wraith") and "Espectro" or "Acechador")
 		local xOff = (i - 1 - (count - 1) / 2) * 8
 		local zOff = (i % 2 == 0) and -6 or 6
-		local spawnPos = centerPos + Vector3.new(xOff, 4.5, zOff)
+		local spawnPos = centerPos + Vector3.new(xOff, 4.0, zOff)
 
 		ProceduralModels.CreateR6Monster(
-			string.format("%s [Nv.%d]", prefix, stage),
+			string.format("%s Nv.%d", prefix, stage),
 			spawnPos,
 			centerPos.Z - 42,
 			centerPos.Z + 42,
@@ -175,15 +173,12 @@ local function generateMap()
 		local biome = getBiomeForStage(stage)
 		local checkpointCFrame = CFrame.new(currentPos)
 
-		-- 1. Crear Checkpoint amplio con farola y cartel de Bioma
 		ProceduralModels.CreateCheckpoint(stage, checkpointCFrame, biome, checkpointsFolder)
 
-		-- 2. Generar Valle Escénico Inferior (Ríos brillantes, montañas, castillos)
 		if stage % 2 == 1 then
 			ProceduralModels.CreateValleyScenery(currentPos, biome, mapFolder)
 		end
 
-		-- 3. Colocar Armario de Supervivencia en plataforma lateral cada 3 etapas
 		if stage % 3 == 0 then
 			createStagePart(
 				"ClosetSidePad_" .. stage,
@@ -199,137 +194,131 @@ local function generateMap()
 			)
 		end
 
-		-- 4. Construir Etapas Largas con 8 Arquetipos Distintos y Grandes Arenas de Batalla
 		if stage < 150 then
-			local stageType = (stage % 8) + 1
+			-- 6 Patrones de Etapa con Subidas, Bajadas, Toboganes, Saltos y Arenas de Horda
+			local pattern = ((stage - 1) % 6) + 1
 
 			if stage % 30 == 0 then
-				-- ARENA GIGANTE DE JEFE DE BIOMA + GUARDIAS
-				local arenaCenter = currentPos + Vector3.new(0, 0, -52)
-				createStagePart("BossBridge_" .. stage, Vector3.new(14, 1.5, 28), CFrame.new(currentPos + Vector3.new(0, 0, -18)), biome.Color, biome.Mat, mapFolder)
-				createStagePart("BossColiseum_" .. stage, Vector3.new(52, 2, 56), CFrame.new(arenaCenter), biome.Color, biome.Mat, mapFolder)
-				ProceduralModels.CreateGothicArch(CFrame.new(currentPos + Vector3.new(0, 0.75, -26)), biome.Color, biome.NeonColor, mapFolder)
+				-- GRAN COLISEO ELEVADO DE JEFE DE BIOMA
+				ProceduralModels.CreateStaircase(CFrame.new(currentPos + Vector3.new(0, 0, -8)), 10, biome.Color, biome.NeonColor, mapFolder)
+				local arenaCenter = currentPos + Vector3.new(0, 14, -68)
+				createStagePart("BossColiseum_" .. stage, Vector3.new(50, 2, 54), CFrame.new(arenaCenter), biome.Color, biome.Mat, mapFolder)
+				ProceduralModels.CreateGothicArch(CFrame.new(arenaCenter + Vector3.new(0, 1, 24)), biome.Color, biome.NeonColor, mapFolder)
 
-				-- Pilares de cobertura en el coliseo
-				for _, px in ipairs({-18, 18}) do
-					for _, pz in ipairs({-16, 16}) do
-						createStagePart("ArenaPillar", Vector3.new(4, 14, 4), CFrame.new(arenaCenter + Vector3.new(px, 7, pz)), Color3.fromRGB(60, 55, 68), Enum.Material.Slate, mapFolder)
-					end
-				end
-
-				ProceduralModels.CreateR6Monster(biome.BossName, arenaCenter + Vector3.new(0, 5.5, 0), arenaCenter.Z - 26, arenaCenter.Z + 26, 16.5, monstersFolder, "Boss", 2.0)
+				ProceduralModels.CreateR6Monster(biome.BossName, arenaCenter + Vector3.new(0, 5, 0), arenaCenter.Z - 25, arenaCenter.Z + 25, 17, monstersFolder, "Boss", 1.9)
 				spawnMonsterPack(arenaCenter + Vector3.new(0, 0, -10), 2, stage, monstersFolder)
 
-				currentPos = currentPos + Vector3.new(0, 0, -96)
+				currentPos = arenaCenter + Vector3.new(0, 0, -38)
 
-			elseif stageType == 1 or stageType == 5 then
-				-- ARQUETIPO A: GRAN ARENA DE COMBATE LIBRE (Manada de 3 criaturas + Pilares + Arco Gótico)
-				createStagePart("EntryWalk_" .. stage, Vector3.new(12, 1.4, 24), CFrame.new(currentPos + Vector3.new(0, 0, -16)), biome.Color, biome.Mat, mapFolder)
-				ProceduralModels.CreateGothicArch(CFrame.new(currentPos + Vector3.new(0, 0.7, -26)), biome.Color, biome.NeonColor, mapFolder)
+			elseif pattern == 1 then
+				-- PATRÓN 1 (ETAPA 1): ESCALADA CON LÁSERES GIRATORIOS + TRAMPOLÍN + ARENA EN ALTURA + TOBOGÁN
+				ProceduralModels.CreateStaircase(CFrame.new(currentPos + Vector3.new(0, 0, -8)), 8, biome.Color, biome.NeonColor, mapFolder)
+				local midDeck = currentPos + Vector3.new(0, 11.2, -46)
+				createStagePart("HighWalk_" .. stage, Vector3.new(14, 1.5, 26), CFrame.new(midDeck), biome.Color, biome.Mat, mapFolder)
+				ProceduralModels.CreateSpinningLaser(CFrame.new(midDeck), 13, mapFolder)
 
-				local arenaCenter = currentPos + Vector3.new(0, 0, -56)
-				createStagePart("BattleArena_" .. stage, Vector3.new(38, 1.6, 52), CFrame.new(arenaCenter), biome.Color, biome.Mat, mapFolder)
+				-- Trampolín de Súper Salto hacia la Arena Superior
+				ProceduralModels.CreateBouncePad(CFrame.new(midDeck + Vector3.new(0, 0.8, -10)), 82, mapFolder)
 
-				-- Muros bajos laterales y árboles decorativos
-				for _, side in ipairs({-1, 1}) do
-					createStagePart("ArenaWall", Vector3.new(2, 4, 48), CFrame.new(arenaCenter + Vector3.new(side * 18, 2, 0)), Color3.fromRGB(65, 58, 72), Enum.Material.Brick, mapFolder)
-					ProceduralModels.CreateSpookyTree(CFrame.new(arenaCenter + Vector3.new(side * 15, 0.8, -15)), biome.NeonColor, mapFolder)
-				end
+				local highArena = midDeck + Vector3.new(0, 12, -44)
+				createStagePart("SkyArena_" .. stage, Vector3.new(36, 1.6, 44), CFrame.new(highArena), biome.Color, biome.Mat, mapFolder)
+				ProceduralModels.CreateGothicArch(CFrame.new(highArena + Vector3.new(0, 0.8, 19)), biome.Color, biome.NeonColor, mapFolder)
+				spawnMonsterPack(highArena, 3, stage, monstersFolder)
 
-				-- Spawnear 3 criaturas en la Arena para pelear libremente
-				spawnMonsterPack(arenaCenter, 3, stage, monstersFolder)
+				currentPos = highArena + Vector3.new(0, 0, -32)
 
-				createStagePart("ExitWalk_" .. stage, Vector3.new(12, 1.4, 22), CFrame.new(currentPos + Vector3.new(0, 0, -90)), biome.Color, biome.Mat, mapFolder)
-				currentPos = currentPos + Vector3.new(0, 0, -108)
+			elseif pattern == 2 then
+				-- PATRÓN 2 (ETAPA 2): MEGA TOBOGÁN EXTREMO CON BARRERAS + RAMPA DE VUELO + FOSO DE COMBATE
+				local _, dropY, advZ = ProceduralModels.CreateSlide(
+					CFrame.new(currentPos + Vector3.new(0, 0, -8)),
+					54,
+					biome.NeonColor,
+					mapFolder
+				)
 
-			elseif stageType == 2 then
-				-- ARQUETIPO B: BULEVAR ASEDIADO (Calle larga con fachadas de edificios, farolas, láseres y 2 monstruos)
-				local streetCenter = currentPos + Vector3.new(0, 0, -52)
-				createStagePart("Boulevard_" .. stage, Vector3.new(18, 1.5, 88), CFrame.new(streetCenter), biome.Color, biome.Mat, mapFolder)
-
-				for _, side in ipairs({-1, 1}) do
-					createStagePart("BuildingFacade", Vector3.new(6, 22, 36), CFrame.new(streetCenter + Vector3.new(side * 14, 11, 0)), Color3.fromRGB(55, 45, 58), Enum.Material.Brick, mapFolder)
-					ProceduralModels.CreateStreetLamp(CFrame.new(streetCenter + Vector3.new(side * 7.5, 0.75, -20)), biome.NeonColor, mapFolder)
-				end
-
-				for i = 1, 3 do
-					local laser = createStagePart("KillLaser", Vector3.new(18, 0.7, 0.7), CFrame.new(currentPos + Vector3.new(0, 2.2, -22 * i)), Color3.fromRGB(255, 25, 25), Enum.Material.Neon, mapFolder)
-					laser.CanCollide = false
-					laser:SetAttribute("IsHazard", true)
-				end
-
-				spawnMonsterPack(streetCenter, 2, stage, monstersFolder)
-				currentPos = currentPos + Vector3.new(0, 0, -104)
-
-			elseif stageType == 3 then
-				-- ARQUETIPO C: CAÑÓN DE SALTOS Y PLATAFORMA DE COMBATE INTERMEDIA
-				for step = 1, 3 do
-					local xOff = (step % 2 == 0) and 4.5 or -4.5
-					createStagePart("JumpStone_" .. step, Vector3.new(8, 1.4, 8), CFrame.new(currentPos + Vector3.new(xOff, step * 0.6, -step * 12)), biome.Color, biome.Mat, mapFolder)
-				end
-
-				local midArena = currentPos + Vector3.new(0, 2, -64)
-				createStagePart("MidCombatDeck_" .. stage, Vector3.new(28, 1.5, 36), CFrame.new(midArena), biome.Color, biome.Mat, mapFolder)
-				spawnMonsterPack(midArena, 2, stage, monstersFolder)
-
-				for step = 1, 2 do
-					createStagePart("ExitStone_" .. step, Vector3.new(8, 1.4, 8), CFrame.new(midArena + Vector3.new(0, 0, -18 - step * 12)), biome.Color, biome.Mat, mapFolder)
-				end
-				currentPos = currentPos + Vector3.new(0, 2, -116)
-
-			elseif stageType == 4 then
-				-- ARQUETIPO D: TOBOGÁN GIGANTE + FOSO DE EMBOSCADA AL FINAL
-				local slideLen = 48
-				ProceduralModels.CreateSlide(CFrame.new(currentPos + Vector3.new(0, 0, -6)), slideLen, mapFolder)
-				local dropY = -math.sin(math.rad(22)) * slideLen
-				local advanceZ = -math.cos(math.rad(22)) * slideLen - 6
-
-				local pitCenter = currentPos + Vector3.new(0, dropY, advanceZ - 26)
-				createStagePart("AmbushPit_" .. stage, Vector3.new(32, 1.6, 44), CFrame.new(pitCenter), biome.Color, biome.Mat, mapFolder)
+				local pitCenter = currentPos + Vector3.new(0, dropY + 4, advZ - 42)
+				createStagePart("SlideLandingArena_" .. stage, Vector3.new(38, 1.8, 48), CFrame.new(pitCenter), biome.Color, biome.Mat, mapFolder)
+				ProceduralModels.CreateSpinningLaser(CFrame.new(pitCenter + Vector3.new(0, 0, 12)), 16, mapFolder)
 				spawnMonsterPack(pitCenter, 3, stage, monstersFolder)
 
-				currentPos = pitCenter + Vector3.new(0, 0, -30)
+				currentPos = pitCenter + Vector3.new(0, 0, -34)
 
-			elseif stageType == 6 then
-				-- ARQUETIPO E: ESCALINATA AL TEMPLO MALDITO + PLAZA EN LA CIMA
-				local steps = 12
-				ProceduralModels.CreateStaircase(CFrame.new(currentPos + Vector3.new(0, 0, -6)), steps, biome.Color, mapFolder)
-				local topPos = currentPos + Vector3.new(0, steps * 1.2, -(steps * 3 + 6))
-
-				local templeCenter = topPos + Vector3.new(0, 0, -26)
-				createStagePart("TemplePlaza_" .. stage, Vector3.new(34, 1.6, 42), CFrame.new(templeCenter), biome.Color, biome.Mat, mapFolder)
-				ProceduralModels.CreateGothicArch(CFrame.new(templeCenter + Vector3.new(0, 0.8, 16)), biome.Color, biome.NeonColor, mapFolder)
-				spawnMonsterPack(templeCenter, 3, stage, monstersFolder)
-
-				currentPos = templeCenter + Vector3.new(0, 0, -30)
-
-			elseif stageType == 7 then
-				-- ARQUETIPO F: PUENTE GEMELO SOBRE FOSO DE LAVA + FORTALEZA CENTRAL
-				for _, xSide in ipairs({-6, 6}) do
-					createStagePart("TwinBridge", Vector3.new(6, 1.2, 42), CFrame.new(currentPos + Vector3.new(xSide, 0, -26)), biome.Color, biome.Mat, mapFolder)
+			elseif pattern == 3 then
+				-- PATRÓN 3 (ETAPA 3): SALTOS ASCENDENTES EN ZIG-ZAG + PLATAFORMA MÓVIL + TEMPLO
+				for step = 1, 4 do
+					local xSide = (step % 2 == 0) and 6 or -6
+					local padPos = currentPos + Vector3.new(xSide, step * 3.2, -step * 11)
+					createStagePart("ZigZagJump_" .. step, Vector3.new(8.5, 1.4, 8.5), CFrame.new(padPos), biome.Color, biome.Mat, mapFolder)
 				end
-				local fortCenter = currentPos + Vector3.new(0, 0, -68)
-				createStagePart("CentralFort_" .. stage, Vector3.new(32, 1.6, 38), CFrame.new(fortCenter), biome.Color, biome.Mat, mapFolder)
-				spawnMonsterPack(fortCenter, 2, stage, monstersFolder)
 
-				currentPos = fortCenter + Vector3.new(0, 0, -28)
+				local moveStart = currentPos + Vector3.new(0, 14, -56)
+				local moveEnd = currentPos + Vector3.new(0, 20, -76)
+				ProceduralModels.CreateMovingPlatform(CFrame.new(moveStart), CFrame.new(moveEnd), 3.0, biome.NeonColor, Enum.Material.Neon, mapFolder)
+
+				local templeArena = currentPos + Vector3.new(0, 20, -108)
+				createStagePart("TempleArena_" .. stage, Vector3.new(36, 1.6, 44), CFrame.new(templeArena), biome.Color, biome.Mat, mapFolder)
+				spawnMonsterPack(templeArena, 3, stage, monstersFolder)
+
+				currentPos = templeArena + Vector3.new(0, 0, -32)
+
+			elseif pattern == 4 then
+				-- PATRÓN 4 (ETAPA 4): PUENTE DE CRISTALES INTERMITENTES + DESCENSO EN CASCADA + COLISEO
+				for i = 1, 3 do
+					local bridgePos = currentPos + Vector3.new((i % 2 == 0) and 4 or -4, -i * 2.5, -i * 13)
+					local glass = createStagePart("FadingBridge_" .. i, Vector3.new(9, 1.2, 9), CFrame.new(bridgePos), biome.NeonColor, Enum.Material.Neon, mapFolder)
+					glass:SetAttribute("FadingPlatform", true)
+				end
+
+				local lowerArena = currentPos + Vector3.new(0, -10, -72)
+				createStagePart("LowerColiseum_" .. stage, Vector3.new(40, 1.8, 50), CFrame.new(lowerArena), biome.Color, biome.Mat, mapFolder)
+				for _, side in ipairs({-1, 1}) do
+					ProceduralModels.CreateSpookyTree(CFrame.new(lowerArena + Vector3.new(side * 16, 0.9, -12)), biome.NeonColor, mapFolder)
+				end
+				spawnMonsterPack(lowerArena, 4, stage, monstersFolder)
+
+				currentPos = lowerArena + Vector3.new(0, 0, -35)
+
+			elseif pattern == 5 then
+				-- PATRÓN 5 (ETAPA 5): DOBLE TRAMPOLÍN AÉREO + ISLAS FLOTANTES + TOBOGÁN DE BAJADA
+				ProceduralModels.CreateBouncePad(CFrame.new(currentPos + Vector3.new(0, 0.5, -10)), 88, mapFolder)
+
+				local skyIsland1 = currentPos + Vector3.new(0, 16, -38)
+				createStagePart("SkyIsland1_" .. stage, Vector3.new(22, 1.6, 24), CFrame.new(skyIsland1), biome.Color, biome.Mat, mapFolder)
+				ProceduralModels.CreateSpinningLaser(CFrame.new(skyIsland1), 15, mapFolder)
+
+				ProceduralModels.CreateBouncePad(CFrame.new(skyIsland1 + Vector3.new(0, 0.8, -9)), 88, mapFolder)
+
+				local skyIsland2 = skyIsland1 + Vector3.new(0, 14, -38)
+				createStagePart("SkyIsland2_" .. stage, Vector3.new(36, 1.8, 42), CFrame.new(skyIsland2), biome.Color, biome.Mat, mapFolder)
+				spawnMonsterPack(skyIsland2, 3, stage, monstersFolder)
+
+				local _, dropY, advZ = ProceduralModels.CreateSlide(CFrame.new(skyIsland2 + Vector3.new(0, 0, -22)), 42, biome.NeonColor, mapFolder)
+				currentPos = skyIsland2 + Vector3.new(0, dropY, -22 + advZ - 14)
 
 			else
-				-- ARQUETIPO G: SENDERO DEL PANTANO CON ÁRBOLES Y EMBOSCADA
-				local marshCenter = currentPos + Vector3.new(0, 0, -48)
-				createStagePart("MarshBoardwalk_" .. stage, Vector3.new(24, 1.4, 80), CFrame.new(marshCenter), Color3.fromRGB(95, 65, 42), Enum.Material.WoodPlanks, mapFolder)
-				for _, side in ipairs({-1, 1}) do
-					ProceduralModels.CreateSpookyTree(CFrame.new(marshCenter + Vector3.new(side * 10, 0.7, -18)), biome.NeonColor, mapFolder)
-					ProceduralModels.CreateSpookyTree(CFrame.new(marshCenter + Vector3.new(side * 10, 0.7, 18)), biome.NeonColor, mapFolder)
-				end
-				spawnMonsterPack(marshCenter, 3, stage, monstersFolder)
-				currentPos = currentPos + Vector3.new(0, 0, -96)
+				-- PATRÓN 6 (ETAPA 6): GRAN FORTALEZA CON RAMPAS LATERALES, LÁSERES Y HORDA
+				local rampUp = createStagePart(
+					"CastleRampUp_" .. stage,
+					Vector3.new(14, 1.4, 34),
+					CFrame.new(currentPos + Vector3.new(0, 5.5, -22)) * CFrame.Angles(math.rad(19), 0, 0),
+					biome.Color,
+					biome.Mat,
+					mapFolder
+				)
+
+				local fortPos = currentPos + Vector3.new(0, 11, -64)
+				createStagePart("FortressDeck_" .. stage, Vector3.new(42, 1.8, 52), CFrame.new(fortPos), biome.Color, biome.Mat, mapFolder)
+				ProceduralModels.CreateGothicArch(CFrame.new(fortPos + Vector3.new(0, 0.9, 22)), biome.Color, biome.NeonColor, mapFolder)
+				ProceduralModels.CreateSpinningLaser(CFrame.new(fortPos + Vector3.new(-10, 0, 0)), 14, mapFolder)
+				ProceduralModels.CreateSpinningLaser(CFrame.new(fortPos + Vector3.new(10, 0, 0)), 14, mapFolder)
+
+				spawnMonsterPack(fortPos, 4, stage, monstersFolder)
+				currentPos = fortPos + Vector3.new(0, 0, -36)
 			end
 		else
-			-- GRAN COLISEO DE VICTORIA EN ETAPA 150
-			local finishPlatform = createStagePart(
+			createStagePart(
 				"VictoryPlatform",
-				Vector3.new(40, 2, 40),
+				Vector3.new(44, 2, 44),
 				CFrame.new(currentPos + Vector3.new(0, 0, -28)),
 				Color3.fromRGB(255, 200, 45),
 				Enum.Material.Neon,
@@ -342,7 +331,81 @@ local function generateMap()
 		end
 	end
 
-	print("[LevelGenerator] 150 etapas largas, Arenas de Batalla, manadas de monstruos y Valle Escénico generados.")
+	print("[LevelGenerator] 150 etapas verticales con toboganes, trampolines, láseres giratorios y hordas listas.")
 end
 
 generateMap()
+
+-- ============================================================================
+-- SISTEMA DE TORMENTA ELÉCTRICA EN VIVO (RAYOS RAMIFICADOS 3D Y TRUENOS)
+-- ============================================================================
+local function spawnLightningBolt(targetPos)
+	local boltModel = Instance.new("Model")
+	boltModel.Name = "SkyLightningBolt"
+
+	local currentPoint = targetPos + Vector3.new(math.random(-25, 25), 140, math.random(-25, 25))
+	local segments = 8
+	local stepY = -140 / segments
+
+	for i = 1, segments do
+		local nextPoint = Vector3.new(
+			currentPoint.X + math.random(-9, 9),
+			currentPoint.Y + stepY,
+			currentPoint.Z + math.random(-9, 9)
+		)
+		local dist = (nextPoint - currentPoint).Magnitude
+		local seg = Instance.new("Part")
+		seg.Size = Vector3.new(1.4, 1.4, dist)
+		seg.CFrame = CFrame.lookAt((currentPoint + nextPoint) / 2, nextPoint)
+		seg.Color = Color3.fromRGB(200, 235, 255)
+		seg.Material = Enum.Material.Neon
+		seg.Anchored = true
+		seg.CanCollide = false
+		seg.Parent = boltModel
+		currentPoint = nextPoint
+	end
+
+	-- Sonido de Trueno potente en 3D
+	local soundHolder = Instance.new("Part")
+	soundHolder.Size = Vector3.new(1, 1, 1)
+	soundHolder.Position = targetPos
+	soundHolder.Transparency = 1
+	soundHolder.Anchored = true
+	soundHolder.CanCollide = false
+	soundHolder.Parent = boltModel
+
+	local thunder = Instance.new("Sound")
+	thunder.SoundId = "rbxassetid://9114221580"
+	thunder.PlaybackSpeed = 0.65
+	thunder.Volume = 1.0
+	thunder.RollOffMaxDistance = 400
+	thunder.Parent = soundHolder
+	pcall(function()
+		thunder:Play()
+	end)
+
+	boltModel.Parent = Workspace
+	Debris:AddItem(boltModel, 0.35)
+
+	-- Relámpago breve en el cielo
+	local oldBrightness = Lighting.Brightness
+	Lighting.Brightness = 6.0
+	task.delay(0.12, function()
+		Lighting.Brightness = oldBrightness
+	end)
+end
+
+task.spawn(function()
+	while true do
+		task.wait(math.random(10, 16))
+		local playersList = game:GetService("Players"):GetPlayers()
+		if #playersList > 0 then
+			local randomPlayer = playersList[math.random(1, #playersList)]
+			local hrp = randomPlayer.Character and randomPlayer.Character:FindFirstChild("HumanoidRootPart")
+			if hrp then
+				local strikePos = hrp.Position + Vector3.new(math.random(-55, 55), 0, math.random(-85, -30))
+				spawnLightningBolt(strikePos)
+			end
+		end
+	end
+end)
