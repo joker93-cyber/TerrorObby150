@@ -45,7 +45,6 @@ local function getCooldownTable(userId)
 	return PlayerCooldowns[userId]
 end
 
--- Sonido 3D instantáneo en la posición de combate
 local function play3DSound(parentPart, soundId, pitch, volume)
 	if not parentPart then return end
 	local s = Instance.new("Sound")
@@ -60,7 +59,6 @@ local function play3DSound(parentPart, soundId, pitch, volume)
 	Debris:AddItem(s, 2)
 end
 
--- Muestra un número de daño flotante ("-35 💥") sobre el enemigo golpeado
 local function showFloatingDamage(position, damageAmount, isCrit)
 	local anchor = Instance.new("Part")
 	anchor.Size = Vector3.new(1, 1, 1)
@@ -88,7 +86,6 @@ local function showFloatingDamage(position, damageAmount, isCrit)
 	txt.Parent = bb
 end
 
--- Equipa la Katana de Energía Carmesí en la mano derecha del jugador al aparecer
 local function equipEnergyBlade(character)
 	local hand = character:WaitForChild("RightHand", 3) or character:WaitForChild("Right Arm", 3)
 	if not hand then return end
@@ -115,6 +112,7 @@ Players.PlayerAdded:Connect(function(player)
 		task.spawn(equipEnergyBlade, char)
 	end)
 end)
+
 for _, p in ipairs(Players:GetPlayers()) do
 	if p.Character then
 		task.spawn(equipEnergyBlade, p.Character)
@@ -164,7 +162,6 @@ Players.PlayerRemoving:Connect(function(player)
 	KillRewardHistory[player.UserId] = nil
 end)
 
--- Aplica daño real, destello de impacto, empuje y monedas al derrotar criaturas
 local function damageMonster(attacker, monster, damageAmount, stunDuration, attackerPos)
 	local mHum = monster:FindFirstChildOfClass("Humanoid")
 	local mRoot = monster.PrimaryPart or monster:FindFirstChild("HumanoidRootPart")
@@ -175,7 +172,6 @@ local function damageMonster(attacker, monster, damageAmount, stunDuration, atta
 		monster:SetAttribute("StunnedUntil", os.clock() + stunDuration)
 	end
 
-	-- Empuje físico (Knockback) sobre la criatura
 	if attackerPos then
 		local pushDir = (mRoot.Position - attackerPos)
 		if pushDir.Magnitude > 0.1 then
@@ -183,7 +179,6 @@ local function damageMonster(attacker, monster, damageAmount, stunDuration, atta
 		end
 	end
 
-	-- Destello visual de impacto en la criatura
 	local hl = Instance.new("Highlight")
 	hl.FillColor = Color3.fromRGB(255, 255, 255)
 	hl.OutlineColor = Color3.fromRGB(255, 40, 40)
@@ -203,7 +198,6 @@ local function damageMonster(attacker, monster, damageAmount, stunDuration, atta
 			_G.TerrorObbyAddCoins(attacker, coinReward)
 		end
 
-		-- Explosión al derrotar al monstruo
 		local burst = Instance.new("Part")
 		burst.Shape = Enum.PartType.Ball
 		burst.Size = Vector3.new(12, 12, 12)
@@ -229,7 +223,6 @@ local function damageMonster(attacker, monster, damageAmount, stunDuration, atta
 	return true
 end
 
--- 1. ATAQUE CON ESPADA DE ENERGÍA, AUTO-ENFOQUE MÓVIL Y ONDA DE CORTE 3D
 basicAttackEvent.OnServerEvent:Connect(function(attacker)
 	local cd = getCooldownTable(attacker.UserId)
 	local now = os.clock()
@@ -248,7 +241,6 @@ basicAttackEvent.OnServerEvent:Connect(function(attacker)
 		attacker:SetAttribute("IsInvisible", false)
 	end
 
-	-- Auto-orientar al jugador hacia el monstruo más cercano si está a menos de 14 studs (¡Ideal para iPhone!)
 	local monstersFolder = Workspace:FindFirstChild("Monsters")
 	local closestMonster = nil
 	local closestDist = 14
@@ -271,7 +263,6 @@ basicAttackEvent.OnServerEvent:Connect(function(attacker)
 		hrp.CFrame = CFrame.lookAt(hrp.Position, Vector3.new(mPos.X, hrp.Position.Y, mPos.Z))
 	end
 
-	-- Sonido de tajo de espada y Onda de Corte 3D (Slash Crescent)
 	play3DSound(hrp, "rbxassetid://12222216", 1.05, 0.75)
 
 	local slashWave = Instance.new("Part")
@@ -289,7 +280,6 @@ basicAttackEvent.OnServerEvent:Connect(function(attacker)
 	local baseDamage = attacker:GetAttribute("HasVIP") and 35 or 28
 	local lookVec = hrp.CFrame.LookVector
 
-	-- A) Golpear a todas las criaturas en rango (14 studs al frente o 9 studs alrededor)
 	if monstersFolder then
 		for _, monster in ipairs(monstersFolder:GetChildren()) do
 			local mRoot = monster.PrimaryPart or monster:FindFirstChild("HumanoidRootPart")
@@ -303,7 +293,6 @@ basicAttackEvent.OnServerEvent:Connect(function(attacker)
 		end
 	end
 
-	-- B) Combate PvP contra otros jugadores (fuera de Zona Segura)
 	if isPlayerInSafeZone(attacker) then
 		return
 	end
@@ -347,7 +336,6 @@ basicAttackEvent.OnServerEvent:Connect(function(attacker)
 	end
 end)
 
--- 2. PODERES Y HABILIDADES CON EFECTOS VISUALES Y SONIDOS ÉPICOS
 activateAbilityEvent.OnServerEvent:Connect(function(player, abilityId)
 	if type(abilityId) ~= "string" then return end
 	local cfg = AbilityConfig.Abilities[abilityId]
@@ -374,7 +362,6 @@ activateAbilityEvent.OnServerEvent:Connect(function(player, abilityId)
 		local flatDir = Vector3.new(look.X, 0.18, look.Z).Unit
 		hrp.AssemblyLinearVelocity = flatDir * 78
 
-		-- Estela relámpago de Dash y daño de embestida a monstruos en el camino
 		local trailPart = Instance.new("Part")
 		trailPart.Size = Vector3.new(4, 4, 14)
 		trailPart.CFrame = hrp.CFrame * CFrame.new(0, 0, -5)
