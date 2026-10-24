@@ -1,19 +1,20 @@
 -- GameManager.server.lua
 -- Ubicación: ServerScriptService.GameManager
--- Incluye piso de seguridad garantizado y rescate inmediato si el jugador cae al vacío.
+-- Incluye IA de monstruos por variante, ataques de Jefes con anillo de advertencia
+-- y rescate automático anti-vacío.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local DataStoreService = game:GetService("DataStoreService")
 local Workspace = game:GetService("Workspace")
+local Debris = game:GetService("Debris")
 
--- Garantizar piso de seguridad en (0, 9, 0) aunque LevelGenerator aún esté iniciando
 if not Workspace:FindFirstChild("MainSafetySpawn") then
 	local safetyFloor = Instance.new("SpawnLocation")
 	safetyFloor.Name = "MainSafetySpawn"
-	safetyFloor.Size = Vector3.new(50, 2, 50)
+	safetyFloor.Size = Vector3.new(54, 2, 54)
 	safetyFloor.CFrame = CFrame.new(0, 9, 0)
-	safetyFloor.Color = Color3.fromRGB(50, 45, 50)
+	safetyFloor.Color = Color3.fromRGB(75, 65, 78)
 	safetyFloor.Material = Enum.Material.Cobblestone
 	safetyFloor.Anchored = true
 	safetyFloor.CanCollide = true
@@ -109,7 +110,6 @@ local function teleportToStage(player, character, stageNumber)
 	local hrp = character:FindFirstChild("HumanoidRootPart")
 	if not hrp then return end
 
-	-- Esperar brevemente si los Checkpoints aún se están generando al arrancar el servidor
 	local checkpoint = getCheckpointPart(stageNumber)
 	local targetPos = Vector3.new(0, 14, 0)
 	if checkpoint then
@@ -174,8 +174,8 @@ local function onPlayerAdded(player)
 		local light = Instance.new("SpotLight")
 		light.Name = "ServerFlashlight"
 		light.Brightness = 3.5
-		light.Range = 42
-		light.Angle = 55
+		light.Range = 45
+		light.Angle = 60
 		light.Enabled = false
 		light.Parent = hrp
 
@@ -201,7 +201,7 @@ game:BindToClose(function()
 	end
 end)
 
--- Rescate automático si un jugador cae por debajo del mapa (Evita bucles de caída infinita)
+-- Rescate automático si un jugador cae por debajo del mapa
 task.spawn(function()
 	while true do
 		task.wait(0.35)
@@ -398,6 +398,41 @@ useCrucifixEvent.OnServerEvent:Connect(function(player)
 	end
 end)
 
+-- Ataque telegrafiado de Jefe (Crea un anillo de advertencia rojo 1.2s antes de explotar)
+local function executeBossShockwave(bossModel, bossRoot)
+	local telegraph = Instance.new("Part")
+	telegraph.Name = "BossShockwaveTelegraph"
+	telegraph.Shape = Enum.PartType.Cylinder
+	telegraph.Size = Vector3.new(0.4, 24, 24)
+	telegraph.CFrame = CFrame.new(bossRoot.Position - Vector3.new(0, 2.5, 0)) * CFrame.Angles(0, 0, math.rad(90))
+	telegraph.Color = Color3.fromRGB(255, 30, 30)
+	telegraph.Material = Enum.Material.Neon
+	telegraph.Transparency = 0.45
+	telegraph.Anchored = true
+	telegraph.CanCollide = false
+	telegraph.Parent = Workspace
+	Debris:AddItem(telegraph, 1.35)
+
+	task.delay(1.2, function()
+		if not bossModel or not bossModel.Parent then return end
+		telegraph.Transparency = 0.1
+		for _, player in ipairs(Players:GetPlayers()) do
+			local char = player.Character
+			local pRoot = char and char:FindFirstChild("HumanoidRootPart")
+			local pHum = char and char:FindFirstChildOfClass("Humanoid")
+			if pRoot and pHum and pHum.Health > 0 then
+				local horizontalDist = (Vector3.new(pRoot.Position.X, 0, pRoot.Position.Z) - Vector3.new(telegraph.Position.X, 0, telegraph.Position.Z)).Magnitude
+				local verticalDiff = pRoot.Position.Y - telegraph.Position.Y
+				-- Si el jugador salta a tiempo (verticalDiff > 3.5), esquiva la onda expansiva
+				if horizontalDist <= 12 and verticalDiff < 3.5 then
+					pHum:TakeDamage(35)
+				end
+			end
+		end
+	end)
+end
+
+-- Bucle de IA de Monstruos y Jefes
 task.spawn(function()
 	while true do
 		task.wait(0.25)
@@ -407,15 +442,21 @@ task.spawn(function()
 			for _, monster in ipairs(monstersFolder:GetChildren()) do
 				local mHum = monster:FindFirstChildOfClass("Humanoid")
 				local mRoot = monster.PrimaryPart or monster:FindFirstChild("HumanoidRootPart")
-				if mHum and mRoot then
+				if mHum and mRoot and mHum.Health > 0 then
 					local stunnedUntil = monster:GetAttribute("StunnedUntil") or 0
 					if now < stunnedUntil then
 						mHum.WalkSpeed = 0
 						mHum:MoveTo(mRoot.Position)
 					else
-						mHum.WalkSpeed = monster:GetAttribute("BaseSpeed") or 15
+						local baseSpeed = monster:GetAttribute("BaseSpeed") or 15
+						-- Si es Jefe y tiene menos de 50% de vida, entra en Fase 2 (Furia)
+						if monster:GetAttribute("IsBoss") and mHum.Health < (mHum.MaxHealth * 0.5) then
+							baseSpeed = baseSpeed + 4
+						end
+						mHum.WalkSpeed = baseSpeed
+
 						local nearestPlayer = nil
-						local nearestDist = 55
+						local nearestDist = 60
 
 						for _, player in ipairs(Players:GetPlayers()) do
 							if not player:GetAttribute("IsHiding") and not player:GetAttribute("IsInvisible") then
@@ -435,7 +476,17 @@ task.spawn(function()
 						if nearestPlayer and nearestPlayer.Character then
 							local targetRoot = nearestPlayer.Character.HumanoidRootPart
 							mHum:MoveTo(targetRoot.Position)
-							if nearestDist <= 5 then
+
+							-- Si es Jefe, lanza onda expansiva telegrafiada cada 6 segundos
+							if monster:GetAttribute("IsBoss") and nearestDist <= 18 then
+								local lastSlam = monster:GetAttribute("LastBossSlam") or 0
+								if now - lastSlam >= 6 then
+									monster:SetAttribute("LastBossSlam", now)
+									executeBossShockwave(monster, mRoot)
+								end
+							end
+
+							if nearestDist <= 5.5 then
 								local pHum = nearestPlayer.Character:FindFirstChildOfClass("Humanoid")
 								if pHum and pHum.Health > 0 then
 									if nearestPlayer:GetAttribute("VIPShieldReady") then
@@ -446,9 +497,9 @@ task.spawn(function()
 										nearestPlayer:SetAttribute("ActiveShieldUntil", 0)
 										monster:SetAttribute("StunnedUntil", now + 2.5)
 										pHum:TakeDamage(35)
-										clientNotificationEvent:FireClient(nearestPlayer, "🛡️ ¡Tu habilidad Escudo amortiguó el golpe del monstruo!")
+										clientNotificationEvent:FireClient(nearestPlayer, "🛡️ ¡Tu Escudo amortiguó el golpe!")
 									else
-										pHum.Health = 0
+										pHum:TakeDamage(monster:GetAttribute("IsBoss") and 55 or 100)
 									end
 								end
 							end
@@ -512,4 +563,4 @@ _G.TerrorObbyGrantItem = function(player, itemType)
 	return false, "Artículo desconocido."
 end
 
-print("[GameManager] Sistema completo inicializado con piso de emergencia y rescate anti-vacío.")
+print("[GameManager] Sistema completo actualizado con IA de Jefes y variantes.")
