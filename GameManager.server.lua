@@ -1,14 +1,13 @@
 -- GameManager.server.lua
--- Ubicación: ServerScriptService.GameManager
--- Controla de forma segura etapas, checkpoints, escondites, linterna, Crucifijo Sagrado,
--- guardado de datos (DataStore) e inteligencia artificial de monstruos.
+-- Ubicación en Roblox: ServerScriptService.GameManager
+-- Controla etapas, checkpoints, escondites, invisibilidad, linterna, Crucifijo Sagrado,
+-- guardado de datos (DataStore), recompensas PvP e IA de monstruos.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local DataStoreService = game:GetService("DataStoreService")
 local Workspace = game:GetService("Workspace")
 
--- 1. Crear carpeta de Eventos Remotos de forma segura
 local remotesFolder = ReplicatedStorage:FindFirstChild("Remotes")
 if not remotesFolder then
 	remotesFolder = Instance.new("Folder")
@@ -31,7 +30,6 @@ local useCrucifixEvent = getOrCreateRemote("UseCrucifix")
 local clientNotificationEvent = getOrCreateRemote("ClientNotification")
 local shopPurchaseEvent = getOrCreateRemote("ShopCoinPurchase")
 
--- 2. Configuración de DataStore con protección pcall
 local DATASTORE_NAME = "TerrorObby150_Data_v1"
 local playerDataStore = nil
 pcall(function()
@@ -81,7 +79,6 @@ local function savePlayerData(player)
 	end)
 end
 
--- 3. Búsqueda compatible de Checkpoints (en carpeta Checkpoints o en el mapa)
 local function getCheckpointPart(stageNumber)
 	local checkpointsFolder = Workspace:FindFirstChild("Checkpoints")
 	if checkpointsFolder then
@@ -112,7 +109,6 @@ local function teleportToStage(player, character, stageNumber)
 	end
 end
 
--- 4. Gestión de Jugadores, Leaderstats y Reaparición
 local function onPlayerAdded(player)
 	local data = loadPlayerData(player)
 	RemoteCooldowns[player.UserId] = {}
@@ -138,9 +134,15 @@ local function onPlayerAdded(player)
 
 	player:SetAttribute("CrucifixCharges", data.CrucifixCharges)
 	player:SetAttribute("IsHiding", false)
+	player:SetAttribute("IsInvisible", false)
+	player:SetAttribute("InSafeZone", true)
 
 	player.CharacterAdded:Connect(function(character)
 		player:SetAttribute("IsHiding", false)
+		player:SetAttribute("IsInvisible", false)
+		player:SetAttribute("ActiveShieldUntil", 0)
+		player:SetAttribute("SpawnProtectionUntil", os.clock() + 5)
+
 		local humanoid = character:WaitForChild("Humanoid", 10)
 		local hrp = character:WaitForChild("HumanoidRootPart", 10)
 		if not humanoid or not hrp then return end
@@ -184,13 +186,11 @@ game:BindToClose(function()
 	end
 end)
 
--- 5. Conexión automática de Checkpoints, Láseres y Armarios
 local ConnectedObjects = {}
 
 local function hookObject(obj)
 	if ConnectedObjects[obj] then return end
 
-	-- Checkpoints
 	if obj:IsA("BasePart") then
 		local stageNum = obj:GetAttribute("StageNumber") or tonumber(string.match(obj.Name, "^Checkpoint_(%d+)$"))
 		if stageNum then
@@ -232,7 +232,6 @@ local function hookObject(obj)
 			end)
 		end
 
-		-- Trampas y Láseres
 		if obj:GetAttribute("IsHazard") or obj.Name == "KillLaser" or obj.Name == "KillPart" then
 			ConnectedObjects[obj] = true
 			obj.Touched:Connect(function(hit)
@@ -249,6 +248,8 @@ local function hookObject(obj)
 								player:SetAttribute("VIPShieldReady", true)
 							end
 						end)
+					elseif (player:GetAttribute("ActiveShieldUntil") or 0) > os.clock() then
+						humanoid:TakeDamage(12)
 					else
 						humanoid:TakeDamage(50)
 					end
@@ -257,7 +258,6 @@ local function hookObject(obj)
 		end
 	end
 
-	-- Armarios de escondite (ProximityPrompt)
 	if obj:IsA("ProximityPrompt") and (obj.Name == "HidePrompt" or string.find(string.lower(obj.ActionText), "esconder")) then
 		ConnectedObjects[obj] = true
 		obj.Triggered:Connect(function(player)
@@ -304,7 +304,6 @@ task.spawn(function()
 	Workspace.DescendantAdded:Connect(hookObject)
 end)
 
--- 6. Eventos Remotos de Linterna y Crucifijo Sagrado
 toggleFlashlightEvent.OnServerEvent:Connect(function(player)
 	local cd = RemoteCooldowns[player.UserId]
 	if not cd then return end
@@ -359,7 +358,7 @@ useCrucifixEvent.OnServerEvent:Connect(function(player)
 	end
 end)
 
--- 7. Bucle de IA de Monstruos Optimizado
+-- Bucle de IA de Monstruos (Respeta Armarios e Invisibilidad Sombría)
 task.spawn(function()
 	while true do
 		task.wait(0.25)
@@ -380,7 +379,7 @@ task.spawn(function()
 						local nearestDist = 55
 
 						for _, player in ipairs(Players:GetPlayers()) do
-							if not player:GetAttribute("IsHiding") then
+							if not player:GetAttribute("IsHiding") and not player:GetAttribute("IsInvisible") then
 								local char = player.Character
 								local pRoot = char and char:FindFirstChild("HumanoidRootPart")
 								local pHum = char and char:FindFirstChildOfClass("Humanoid")
@@ -404,6 +403,11 @@ task.spawn(function()
 										nearestPlayer:SetAttribute("VIPShieldReady", false)
 										monster:SetAttribute("StunnedUntil", now + 3)
 										clientNotificationEvent:FireClient(nearestPlayer, "🛡️ ¡Tu Escudo VIP te salvó del monstruo!")
+									elseif (nearestPlayer:GetAttribute("ActiveShieldUntil") or 0) > now then
+										nearestPlayer:SetAttribute("ActiveShieldUntil", 0)
+										monster:SetAttribute("StunnedUntil", now + 2.5)
+										pHum:TakeDamage(35)
+										clientNotificationEvent:FireClient(nearestPlayer, "🛡️ ¡Tu habilidad Escudo amortiguó el golpe del monstruo!")
 									else
 										pHum.Health = 0
 									end
@@ -422,7 +426,17 @@ task.spawn(function()
 	end
 end)
 
--- Función global para compras con monedas desde Monetization.server.lua
+_G.TerrorObbyAddCoins = function(player, amount)
+	local data = SessionData[player.UserId]
+	local leaderstats = player:FindFirstChild("leaderstats")
+	if not data or not leaderstats then return end
+	data.Coins = math.max(0, data.Coins + (tonumber(amount) or 0))
+	local coinsVal = leaderstats:FindFirstChild("Coins")
+	if coinsVal then
+		coinsVal.Value = data.Coins
+	end
+end
+
 _G.TerrorObbyGrantItem = function(player, itemType)
 	local data = SessionData[player.UserId]
 	local leaderstats = player:FindFirstChild("leaderstats")
@@ -443,3 +457,20 @@ _G.TerrorObbyGrantItem = function(player, itemType)
 			return false, "Necesitas 120 Monedas para saltar de etapa."
 		end
 		if data.Stage >= 150 then
+			return false, "Ya estás en la última etapa."
+		end
+		data.Coins -= 120
+		data.Stage += 1
+		if coinsVal then coinsVal.Value = data.Coins end
+		if leaderstats:FindFirstChild("Stage") then
+			leaderstats.Stage.Value = data.Stage
+		end
+		if player.Character then
+			teleportToStage(player, player.Character, data.Stage)
+		end
+		return true, "⚡ Saltaste a la Etapa " .. data.Stage .. "."
+	end
+	return false, "Artículo desconocido."
+end
+
+print("[GameManager] Sistema completo actualizado con soporte para Combate y Habilidades.")
