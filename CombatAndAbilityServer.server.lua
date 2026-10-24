@@ -1,7 +1,6 @@
 -- CombatAndAbilityServer.server.lua
--- Ubicación en Roblox: ServerScriptService.CombatAndAbilityServer
--- Valida en el servidor el combate PvP, las zonas seguras, las recompensas antifarming
--- y la ejecución segura de las 5 habilidades activas.
+-- Ubicación: ServerScriptService.CombatAndAbilityServer
+-- Permite golpear y derrotar Monstruos y Jefes de Bioma además del combate PvP.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -45,7 +44,6 @@ local function getCooldownTable(userId)
 	return PlayerCooldowns[userId]
 end
 
--- Comprueba si una posición o jugador está dentro de una Zona Segura contra PvP
 local function isPlayerInSafeZone(player)
 	if not player or not player.Character then return true end
 	if player:GetAttribute("IsHiding") then return true end
@@ -59,12 +57,10 @@ local function isPlayerInSafeZone(player)
 	if not hrp then return true end
 	local pos = hrp.Position
 
-	-- Zona Segura 1: Avenida del Cine (Hub Inicial)
 	if (pos - Vector3.new(0, 10, 0)).Magnitude <= AbilityConfig.Combat.HubSafeRadius then
 		return true
 	end
 
-	-- Zona Segura 2: Cualquier plataforma de Checkpoint
 	local checkpointsFolder = Workspace:FindFirstChild("Checkpoints")
 	if checkpointsFolder then
 		for _, cp in ipairs(checkpointsFolder:GetChildren()) do
@@ -77,7 +73,6 @@ local function isPlayerInSafeZone(player)
 	return false
 end
 
--- Actualiza el atributo SafeZone para que el cliente sepa si puede combatir
 task.spawn(function()
 	while true do
 		task.wait(0.4)
@@ -90,13 +85,42 @@ task.spawn(function()
 	end
 end)
 
--- Limpieza al salir
 Players.PlayerRemoving:Connect(function(player)
 	PlayerCooldowns[player.UserId] = nil
 	KillRewardHistory[player.UserId] = nil
 end)
 
--- 1. Procesamiento Autoritativo de Ataque Básico Cuerpo a Cuerpo
+-- Daño a Monstruos y Jefes con recompensa de monedas y reaparición automática tras 25s
+local function damageMonster(attacker, monster, damageAmount, stunDuration)
+	local mHum = monster:FindFirstChildOfClass("Humanoid")
+	local mRoot = monster.PrimaryPart or monster:FindFirstChild("HumanoidRootPart")
+	if not mHum or not mRoot or mHum.Health <= 0 then return end
+
+	mHum:TakeDamage(damageAmount)
+	if stunDuration and stunDuration > 0 then
+		monster:SetAttribute("StunnedUntil", os.clock() + stunDuration)
+	end
+	combatFeedbackEvent:FireClient(attacker, "HitMonster", mRoot.Position)
+
+	if mHum.Health <= 0 and not monster:GetAttribute("RewardGranted") then
+		monster:SetAttribute("RewardGranted", true)
+		local isBoss = monster:GetAttribute("IsBoss")
+		local coinReward = isBoss and 80 or 20
+		if _G.TerrorObbyAddCoins then
+			_G.TerrorObbyAddCoins(attacker, coinReward)
+		end
+		clientNotificationEvent:FireClient(
+			attacker,
+			(isBoss and "💀 ¡DERROTASTE AL JEFE " or "🗡️ ¡Abatiste a ") .. monster.Name .. "! (+" .. coinReward .. " Monedas)"
+		)
+		task.delay(2, function()
+			if monster and monster.Parent then
+				monster:Destroy()
+			end
+		end)
+	end
+end
+
 basicAttackEvent.OnServerEvent:Connect(function(attacker)
 	local cd = getCooldownTable(attacker.UserId)
 	local now = os.clock()
@@ -111,41 +135,35 @@ basicAttackEvent.OnServerEvent:Connect(function(attacker)
 	if not hrp or not hum or hum.Health <= 0 then return end
 	if attacker:GetAttribute("IsHiding") then return end
 
-	-- Salir de invisibilidad si ataca
 	if attacker:GetAttribute("IsInvisible") then
 		attacker:SetAttribute("IsInvisible", false)
 	end
 
-	local attackerInSafe = isPlayerInSafeZone(attacker)
-	local maxRange = AbilityConfig.Combat.MeleeRange
+	local baseDamage = attacker:GetAttribute("HasVIP")
+		and AbilityConfig.Combat.VIPMeleeDamage
+		or AbilityConfig.Combat.MeleeDamage
+
+	local maxRange = AbilityConfig.Combat.MeleeRange + 2
 	local lookVec = hrp.CFrame.LookVector
 
-	-- A) Golpear monstruos cercanos para aturdirlos brevemente (1.5s)
+	-- A) Atacar Monstruos y Jefes
 	local monstersFolder = Workspace:FindFirstChild("Monsters")
 	if monstersFolder then
 		for _, monster in ipairs(monstersFolder:GetChildren()) do
 			local mRoot = monster.PrimaryPart or monster:FindFirstChild("HumanoidRootPart")
 			if mRoot then
 				local offset = mRoot.Position - hrp.Position
-				if offset.Magnitude <= maxRange and lookVec:Dot(offset.Unit) > 0.2 then
-					local currentStun = monster:GetAttribute("StunnedUntil") or 0
-					if now >= currentStun then
-						monster:SetAttribute("StunnedUntil", now + 1.5)
-						combatFeedbackEvent:FireClient(attacker, "HitMonster", mRoot.Position)
-					end
+				if offset.Magnitude <= maxRange and lookVec:Dot(offset.Unit) > 0.1 then
+					damageMonster(attacker, monster, baseDamage, 1.2)
 				end
 			end
 		end
 	end
 
-	-- B) Combate PvP contra otros jugadores (Solo fuera de Zonas Seguras)
-	if attackerInSafe then
+	-- B) Combate PvP (Fuera de Zonas Seguras)
+	if isPlayerInSafeZone(attacker) then
 		return
 	end
-
-	local baseDamage = attacker:GetAttribute("HasVIP")
-		and AbilityConfig.Combat.VIPMeleeDamage
-		or AbilityConfig.Combat.MeleeDamage
 
 	for _, targetPlayer in ipairs(Players:GetPlayers()) do
 		if targetPlayer ~= attacker and targetPlayer.Character then
@@ -164,13 +182,11 @@ basicAttackEvent.OnServerEvent:Connect(function(attacker)
 						tHum:TakeDamage(finalDamage)
 						combatFeedbackEvent:FireClient(attacker, "HitPlayer", tRoot.Position)
 
-						-- Impulso físico si el objetivo no tiene escudo activo
 						if not hasActiveShield then
 							local pushDir = (offset.Unit + Vector3.new(0, 0.35, 0)).Unit
 							tRoot.AssemblyLinearVelocity = pushDir * AbilityConfig.Combat.KnockbackForce
 						end
 
-						-- Verificar si derrotó al oponente y otorgar recompensa segura
 						if tHum.Health <= 0 then
 							KillRewardHistory[attacker.UserId] = KillRewardHistory[attacker.UserId] or {}
 							local lastReward = KillRewardHistory[attacker.UserId][targetPlayer.UserId] or 0
@@ -198,7 +214,6 @@ basicAttackEvent.OnServerEvent:Connect(function(attacker)
 	end
 end)
 
--- 2. Procesamiento Autoritativo de Habilidades Especiales
 activateAbilityEvent.OnServerEvent:Connect(function(player, abilityId)
 	if type(abilityId) ~= "string" then return end
 	local cfg = AbilityConfig.Abilities[abilityId]
@@ -234,7 +249,6 @@ activateAbilityEvent.OnServerEvent:Connect(function(player, abilityId)
 		Debris:AddItem(ff, cfg.Duration)
 
 	elseif abilityId == "EnergyPulse" then
-		-- Efecto visual expansivo
 		local wave = Instance.new("Part")
 		wave.Name = "EnergyPulseWave"
 		wave.Shape = Enum.PartType.Ball
@@ -248,18 +262,16 @@ activateAbilityEvent.OnServerEvent:Connect(function(player, abilityId)
 		wave.Parent = Workspace
 		Debris:AddItem(wave, 0.35)
 
-		-- Aturdir monstruos en radio
 		local monstersFolder = Workspace:FindFirstChild("Monsters")
 		if monstersFolder then
 			for _, monster in ipairs(monstersFolder:GetChildren()) do
 				local mRoot = monster.PrimaryPart or monster:FindFirstChild("HumanoidRootPart")
 				if mRoot and (mRoot.Position - hrp.Position).Magnitude <= cfg.Radius then
-					monster:SetAttribute("StunnedUntil", now + cfg.MonsterStunSeconds)
+					damageMonster(player, monster, 35, cfg.MonsterStunSeconds)
 				end
 			end
 		end
 
-		-- Empujar rivales si ambos están fuera de Zona Segura
 		if not isPlayerInSafeZone(player) then
 			for _, other in ipairs(Players:GetPlayers()) do
 				if other ~= player and other.Character and not isPlayerInSafeZone(other) then
@@ -333,14 +345,13 @@ activateAbilityEvent.OnServerEvent:Connect(function(player, abilityId)
 					end
 				end
 			elseif model:FindFirstChildOfClass("Humanoid") then
-				-- Es un monstruo
 				triggered = true
-				model:SetAttribute("StunnedUntil", os.clock() + cfg.MonsterStunSeconds)
-				clientNotificationEvent:FireClient(player, "🕸️ ¡Tu Trampa Rúnica congeló a un monstruo!")
+				damageMonster(player, model, 25, cfg.MonsterStunSeconds)
+				clientNotificationEvent:FireClient(player, "🕸️ ¡Tu Trampa Rúnica hirió y congeló a un monstruo!")
 				trap:Destroy()
 			end
 		end)
 	end
 end)
 
-print("[CombatAndAbilityServer] Sistema PvP y Habilidades inicializado en el servidor.")
+print("[CombatAndAbilityServer] Combate contra Jefes, Monstruos y PvP activo.")
