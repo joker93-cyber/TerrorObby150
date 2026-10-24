@@ -1,296 +1,206 @@
--- ProceduralModels.lua
--- Ubicación en Roblox: ReplicatedStorage.ProceduralModels
--- Genera modelos procedurales 3D sin depender de Meshes externos privados:
--- Avenida del Cine, carpas de otoño, armarios de escondite, toboganes, escalinatas y monstruos R6.
+-- LevelGenerator.server.lua
+-- Ubicación: ServerScriptService.LevelGenerator
+-- Crea un SpawnLocation indestructible en el milisegundo 0, configura la noche de terror
+-- y genera las 150 etapas con materiales 100% seguros para bloques.
 
-local ProceduralModels = {}
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Lighting = game:GetService("Lighting")
 
-local function createPart(props)
-	local part = Instance.new("Part")
-	part.Name = props.Name or "Part"
-	part.Size = props.Size or Vector3.new(4, 1, 4)
-	part.CFrame = props.CFrame or CFrame.new(0, 0, 0)
-	part.Color = props.Color or Color3.fromRGB(120, 120, 120)
-	part.Material = props.Material or Enum.Material.Concrete
-	part.Anchored = (props.Anchored ~= nil) and props.Anchored or true
-	part.CanCollide = (props.CanCollide ~= nil) and props.CanCollide or true
-	part.Transparency = props.Transparency or 0
-	part.TopSurface = Enum.SurfaceType.Smooth
-	part.BottomSurface = Enum.SurfaceType.Smooth
-	if props.Parent then
-		part.Parent = props.Parent
+-- 1. PISO DE APARICIÓN INMEDIATO (Evita caer al vacío mientras carga el resto del mapa)
+local mainSpawn = Workspace:FindFirstChild("MainSafetySpawn")
+if not mainSpawn then
+	mainSpawn = Instance.new("SpawnLocation")
+	mainSpawn.Name = "MainSafetySpawn"
+	mainSpawn.Size = Vector3.new(50, 2, 50)
+	mainSpawn.CFrame = CFrame.new(0, 9, 0)
+	mainSpawn.Color = Color3.fromRGB(50, 45, 50)
+	mainSpawn.Material = Enum.Material.Cobblestone
+	mainSpawn.Anchored = true
+	mainSpawn.CanCollide = true
+	mainSpawn.Neutral = true
+	mainSpawn.Duration = 0
+	mainSpawn.Parent = Workspace
+end
+
+-- 2. ATMÓSFERA NOCTURNA DE TERROR
+pcall(function()
+	Lighting.ClockTime = 0
+	Lighting.Brightness = 0.6
+	Lighting.Ambient = Color3.fromRGB(28, 22, 32)
+	Lighting.OutdoorAmbient = Color3.fromRGB(35, 25, 35)
+	Lighting.FogColor = Color3.fromRGB(15, 10, 18)
+	Lighting.FogStart = 35
+	Lighting.FogEnd = 260
+end)
+
+local ProceduralModels = require(ReplicatedStorage:WaitForChild("ProceduralModels"))
+
+local mapFolder = Workspace:FindFirstChild("ObbyMap") or Instance.new("Folder")
+mapFolder.Name = "ObbyMap"
+mapFolder.Parent = Workspace
+
+local checkpointsFolder = Workspace:FindFirstChild("Checkpoints") or Instance.new("Folder")
+checkpointsFolder.Name = "Checkpoints"
+checkpointsFolder.Parent = Workspace
+
+local monstersFolder = Workspace:FindFirstChild("Monsters") or Instance.new("Folder")
+monstersFolder.Name = "Monsters"
+monstersFolder.Parent = Workspace
+
+local closetsFolder = Workspace:FindFirstChild("HidingClosets") or Instance.new("Folder")
+closetsFolder.Name = "HidingClosets"
+closetsFolder.Parent = Workspace
+
+-- 5 Biomas usando exclusivamente materiales clásicos 100% válidos en Part
+local BIOMES = {
+	{Name = "Ciudad Apocalíptica de Otoño", MaxStage = 30, Color = Color3.fromRGB(115, 65, 35), Mat = Enum.Material.Cobblestone},
+	{Name = "Alcantarillas Subterráneas", MaxStage = 60, Color = Color3.fromRGB(45, 70, 50), Mat = Enum.Material.Slate},
+	{Name = "Bosque Maldito de Calabazas", MaxStage = 90, Color = Color3.fromRGB(75, 45, 85), Mat = Enum.Material.Grass},
+	{Name = "Laboratorio de Pesadilla", MaxStage = 120, Color = Color3.fromRGB(60, 75, 90), Mat = Enum.Material.DiamondPlate},
+	{Name = "Abismo Carmesí", MaxStage = 150, Color = Color3.fromRGB(130, 20, 25), Mat = Enum.Material.Brick}
+}
+
+local function getBiomeForStage(stage)
+	for _, biome in ipairs(BIOMES) do
+		if stage <= biome.MaxStage then
+			return biome
+		end
 	end
-	return part
+	return BIOMES[#BIOMES]
 end
 
--- Crea la fachada del Cine en la Avenida de Otoño (Zona Inicial)
-function ProceduralModels.CreateCinemaFacade(originCFrame, parent)
-	local model = Instance.new("Model")
-	model.Name = "CinemaFacade"
+local function generateMap()
+	mapFolder:ClearAllChildren()
+	checkpointsFolder:ClearAllChildren()
+	monstersFolder:ClearAllChildren()
+	closetsFolder:ClearAllChildren()
 
-	-- Edificio principal del cine
-	createPart({
-		Name = "CinemaWall",
-		Size = Vector3.new(36, 22, 4),
-		CFrame = originCFrame * CFrame.new(0, 11, -18),
-		Color = Color3.fromRGB(35, 25, 30),
-		Material = Enum.Material.Brick,
-		Parent = model
-	})
+	local currentPos = Vector3.new(0, 10, 0)
 
-	-- Marquesina luminosa de neón
-	local marquee = createPart({
-		Name = "Marquee",
-		Size = Vector3.new(26, 5, 3),
-		CFrame = originCFrame * CFrame.new(0, 16, -15),
-		Color = Color3.fromRGB(180, 20, 30),
-		Material = Enum.Material.Neon,
-		Parent = model
-	})
+	pcall(function()
+		ProceduralModels.CreateCinemaFacade(CFrame.new(currentPos), mapFolder)
+	end)
 
-	local gui = Instance.new("SurfaceGui")
-	gui.Face = Enum.NormalId.Front
-	gui.Parent = marquee
+	for stage = 1, 150 do
+		local biome = getBiomeForStage(stage)
+		local checkpointCFrame = CFrame.new(currentPos)
 
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.fromScale(1, 1)
-	label.BackgroundTransparency = 1
-	label.Text = "🎬 CINE TERROR 150 🎃"
-	label.TextColor3 = Color3.fromRGB(255, 240, 200)
-	label.TextScaled = true
-	label.Font = Enum.Font.Creepster
-	label.Parent = gui
+		ProceduralModels.CreateCheckpoint(stage, checkpointCFrame, biome.Color, checkpointsFolder)
 
-	-- Carpas de otoño laterales
-	for _, side in ipairs({-14, 14}) do
-		createPart({
-			Name = "AutumnTent",
-			Size = Vector3.new(8, 7, 8),
-			CFrame = originCFrame * CFrame.new(side, 3.5, -8),
-			Color = Color3.fromRGB(210, 95, 25),
-			Material = Enum.Material.Fabric,
-			Parent = model
-		})
-	end
+		if stage % 4 == 0 then
+			local closetPlatform = Instance.new("Part")
+			closetPlatform.Name = "ClosetSidePad_" .. stage
+			closetPlatform.Size = Vector3.new(8, 1.2, 8)
+			closetPlatform.CFrame = checkpointCFrame * CFrame.new(9, 0, 0)
+			closetPlatform.Color = biome.Color
+			closetPlatform.Material = biome.Mat
+			closetPlatform.Anchored = true
+			closetPlatform.CanCollide = true
+			closetPlatform.Parent = mapFolder
 
-	model.Parent = parent
-	return model
-end
+			ProceduralModels.CreateHidingCloset(
+				checkpointCFrame * CFrame.new(9, 0.6, 0) * CFrame.Angles(0, math.rad(-90), 0),
+				closetsFolder
+			)
+		end
 
--- Crea un Checkpoint numerado con cartel luminoso
-function ProceduralModels.CreateCheckpoint(stageNumber, cframe, biomeColor, parent)
-	local pad = createPart({
-		Name = "Checkpoint_" .. tostring(stageNumber),
-		Size = Vector3.new(10, 1.2, 10),
-		CFrame = cframe,
-		Color = biomeColor or Color3.fromRGB(45, 45, 50),
-		Material = Enum.Material.Slate,
-		Parent = parent
-	})
-	pad:SetAttribute("StageNumber", stageNumber)
+		if stage < 150 then
+			local obstacleType = stage % 5
 
-	local neonBorder = createPart({
-		Name = "NeonIndicator",
-		Size = Vector3.new(10.4, 0.3, 10.4),
-		CFrame = cframe * CFrame.new(0, 0.5, 0),
-		Color = Color3.fromRGB(220, 40, 40),
-		Material = Enum.Material.Neon,
-		CanCollide = false,
-		Parent = pad
-	})
+			if obstacleType == 1 then
+				local bridge = Instance.new("Part")
+				bridge.Name = "Corridor_" .. stage
+				bridge.Size = Vector3.new(10, 1.2, 46)
+				bridge.CFrame = CFrame.new(currentPos + Vector3.new(0, 0, -28))
+				bridge.Color = biome.Color
+				bridge.Material = biome.Mat
+				bridge.Anchored = true
+				bridge.CanCollide = true
+				bridge.Parent = mapFolder
 
-	local billboard = Instance.new("BillboardGui")
-	billboard.Name = "StageSign"
-	billboard.Size = UDim2.fromOffset(120, 40)
-	billboard.StudsOffset = Vector3.new(0, 4.5, 0)
-	billboard.AlwaysOnTop = false
-	billboard.MaxDistance = 80
-	billboard.Parent = pad
+				for i = 1, 2 do
+					local laser = Instance.new("Part")
+					laser.Name = "KillLaser"
+					laser.Size = Vector3.new(10, 0.6, 0.6)
+					laser.CFrame = CFrame.new(currentPos + Vector3.new(0, 2, -14 * i - 5))
+					laser.Color = Color3.fromRGB(255, 20, 20)
+					laser.Material = Enum.Material.Neon
+					laser.Anchored = true
+					laser.CanCollide = false
+					laser:SetAttribute("IsHazard", true)
+					laser.Parent = mapFolder
+				end
 
-	local text = Instance.new("TextLabel")
-	text.Size = UDim2.fromScale(1, 1)
-	text.BackgroundTransparency = 1
-	text.Text = "ETAPA " .. tostring(stageNumber)
-	text.TextColor3 = Color3.fromRGB(255, 220, 180)
-	text.TextStrokeTransparency = 0.2
-	text.TextScaled = true
-	text.Font = Enum.Font.GothamBold
-	text.Parent = billboard
+				if stage % 5 == 1 then
+					local monsterSpeed = math.clamp(14 + math.floor(stage / 25), 14, 20)
+					ProceduralModels.CreateR6Monster(
+						"Acechador_Etapa_" .. stage,
+						currentPos + Vector3.new(0, 4, -28),
+						currentPos.Z - 48,
+						currentPos.Z - 8,
+						monsterSpeed,
+						monstersFolder
+					)
+				end
 
-	return pad
-end
+				currentPos = currentPos + Vector3.new(0, 0, -56)
 
--- Crea un Armario funcional para esconderse de los monstruos
-function ProceduralModels.CreateHidingCloset(cframe, parent)
-	local closet = Instance.new("Model")
-	closet.Name = "HidingCloset"
+			elseif obstacleType == 2 then
+				for step = 1, 4 do
+					local xOffset = (step % 2 == 0) and 3.5 or -3.5
+					local pad = Instance.new("Part")
+					pad.Name = "JumpPad_" .. stage .. "_" .. step
+					pad.Size = Vector3.new(6, 1.2, 6)
+					pad.CFrame = CFrame.new(currentPos + Vector3.new(xOffset, step * 0.4, -step * 10.5))
+					pad.Color = biome.Color
+					pad.Material = biome.Mat
+					pad.Anchored = true
+					pad.CanCollide = true
+					pad.Parent = mapFolder
+				end
+				currentPos = currentPos + Vector3.new(0, 1.6, -52)
 
-	local body = createPart({
-		Name = "ClosetBody",
-		Size = Vector3.new(4.5, 8, 3.5),
-		CFrame = cframe * CFrame.new(0, 4, 0),
-		Color = Color3.fromRGB(65, 40, 25),
-		Material = Enum.Material.WoodPlanks,
-		Parent = closet
-	})
+			elseif obstacleType == 3 then
+				local slideLength = 36
+				ProceduralModels.CreateSlide(CFrame.new(currentPos + Vector3.new(0, 0, -5)), slideLength, mapFolder)
+				local dropY = -math.sin(math.rad(25)) * slideLength
+				local advanceZ = -math.cos(math.rad(25)) * slideLength - 12
+				currentPos = currentPos + Vector3.new(0, dropY, advanceZ)
 
-	local doorSlot = createPart({
-		Name = "ClosetVents",
-		Size = Vector3.new(3.5, 1.5, 0.2),
-		CFrame = cframe * CFrame.new(0, 6, 1.75),
-		Color = Color3.fromRGB(20, 15, 10),
-		Material = Enum.Material.Wood,
-		Parent = closet
-	})
+			elseif obstacleType == 4 then
+				local steps = 10
+				ProceduralModels.CreateStaircase(CFrame.new(currentPos + Vector3.new(0, 0, -5)), steps, mapFolder)
+				currentPos = currentPos + Vector3.new(0, steps * 1.2, -(steps * 2.5 + 12))
 
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = "HidePrompt"
-	prompt.ActionText = "Esconderse / Salir"
-	prompt.ObjectText = "Armario de Supervivencia"
-	prompt.HoldDuration = 0.2
-	prompt.MaxActivationDistance = 8
-	prompt.RequiresLineOfSight = false
-	prompt.Parent = body
-
-	closet.PrimaryPart = body
-	closet.Parent = parent
-	return closet
-end
-
--- Crea un Tobogán extremo
-function ProceduralModels.CreateSlide(startCFrame, length, parent)
-	local model = Instance.new("Model")
-	model.Name = "HorrorSlide"
-
-	local angle = math.rad(-25)
-	local slideCFrame = startCFrame * CFrame.Angles(angle, 0, 0) * CFrame.new(0, 0, -length / 2)
-
-	local ramp = createPart({
-		Name = "SlideRamp",
-		Size = Vector3.new(8, 1, length),
-		CFrame = slideCFrame,
-		Color = Color3.fromRGB(90, 25, 25),
-		Material = Enum.Material.SmoothPlastic,
-		Parent = model
-	})
-
-	-- Bordes laterales para evitar caídas accidentales injustas
-	for _, offset in ipairs({-4.2, 4.2}) do
-		createPart({
-			Name = "SlideRail",
-			Size = Vector3.new(0.6, 2.5, length),
-			CFrame = slideCFrame * CFrame.new(offset, 1.2, 0),
-			Color = Color3.fromRGB(40, 40, 45),
-			Material = Enum.Material.Metal,
-			Parent = model
-		})
-	end
-
-	model.Parent = parent
-	return model
-end
-
--- Crea una Escalinata empinada
-function ProceduralModels.CreateStaircase(startCFrame, stepsCount, parent)
-	local model = Instance.new("Model")
-	model.Name = "TerrorStaircase"
-
-	for i = 1, stepsCount do
-		createPart({
-			Name = "Step_" .. i,
-			Size = Vector3.new(8, 1, 2.5),
-			CFrame = startCFrame * CFrame.new(0, i * 1.2, -i * 2.5),
-			Color = Color3.fromRGB(70, 65, 75),
-			Material = Enum.Material.Cobblestone,
-			Parent = model
-		})
+			else
+				for _, xSide in ipairs({-3.5, 3.5}) do
+					local plank = Instance.new("Part")
+					plank.Name = "PathPlank_" .. stage
+					plank.Size = Vector3.new(4.8, 1.2, 38)
+					plank.CFrame = CFrame.new(currentPos + Vector3.new(xSide, 0, -24))
+					plank.Color = biome.Color
+					plank.Material = biome.Mat
+					plank.Anchored = true
+					plank.CanCollide = true
+					plank.Parent = mapFolder
+				end
+				currentPos = currentPos + Vector3.new(0, 0, -48)
+			end
+		else
+			local finishPlatform = Instance.new("Part")
+			finishPlatform.Name = "VictoryPlatform"
+			finishPlatform.Size = Vector3.new(24, 2, 24)
+			finishPlatform.CFrame = CFrame.new(currentPos + Vector3.new(0, 0, -18))
+			finishPlatform.Color = Color3.fromRGB(255, 195, 40)
+			finishPlatform.Material = Enum.Material.Neon
+			finishPlatform.Anchored = true
+			finishPlatform.CanCollide = true
+			finishPlatform.Parent = mapFolder
+		end
 	end
 
-	model.Parent = parent
-	return model
+	print("[LevelGenerator] Mapa de 150 etapas generado correctamente.")
 end
 
--- Crea un Monstruo R6 con ojos rojos brillantes y cara de terror
-function ProceduralModels.CreateR6Monster(name, spawnPos, minZ, maxZ, walkSpeed, parent)
-	local monster = Instance.new("Model")
-	monster.Name = name or "StalkerR6"
-	monster:SetAttribute("SpawnPosition", spawnPos)
-	monster:SetAttribute("MinZ", minZ)
-	monster:SetAttribute("MaxZ", maxZ)
-	monster:SetAttribute("BaseSpeed", walkSpeed or 15)
-	monster:SetAttribute("StunnedUntil", 0)
-
-	local hrp = createPart({
-		Name = "HumanoidRootPart",
-		Size = Vector3.new(2, 2, 1),
-		CFrame = CFrame.new(spawnPos),
-		Transparency = 1,
-		Anchored = false,
-		CanCollide = true,
-		Parent = monster
-	})
-
-	local torso = createPart({
-		Name = "Torso",
-		Size = Vector3.new(2, 2, 1),
-		CFrame = CFrame.new(spawnPos),
-		Color = Color3.fromRGB(15, 15, 18),
-		Material = Enum.Material.Fabric,
-		Anchored = false,
-		CanCollide = false,
-		Parent = monster
-	})
-
-	local head = createPart({
-		Name = "Head",
-		Size = Vector3.new(1.6, 1.6, 1.6),
-		CFrame = CFrame.new(spawnPos + Vector3.new(0, 1.8, 0)),
-		Color = Color3.fromRGB(215, 205, 195),
-		Material = Enum.Material.Slate,
-		Anchored = false,
-		CanCollide = false,
-		Parent = monster
-	})
-
-	-- Ojos rojos luminosos de terror
-	for _, xOffset in ipairs({-0.35, 0.35}) do
-		local eye = createPart({
-			Name = "HorrorEye",
-			Size = Vector3.new(0.25, 0.25, 0.15),
-			CFrame = head.CFrame * CFrame.new(xOffset, 0.2, -0.8),
-			Color = Color3.fromRGB(255, 15, 15),
-			Material = Enum.Material.Neon,
-			Anchored = false,
-			CanCollide = false,
-			Parent = monster
-		})
-		local weldEye = Instance.new("WeldConstraint")
-		weldEye.Part0 = head
-		weldEye.Part1 = eye
-		weldEye.Parent = head
-	end
-
-	-- Soldaduras R6 básicas para estabilidad física
-	local weldTorso = Instance.new("WeldConstraint")
-	weldTorso.Part0 = hrp
-	weldTorso.Part1 = torso
-	weldTorso.Parent = hrp
-
-	local weldHead = Instance.new("WeldConstraint")
-	weldHead.Part0 = torso
-	weldHead.Part1 = head
-	weldHead.Parent = torso
-
-	local humanoid = Instance.new("Humanoid")
-	humanoid.WalkSpeed = walkSpeed or 15
-	humanoid.MaxHealth = 500
-	humanoid.Health = 500
-	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
-	humanoid.Parent = monster
-
-	monster.PrimaryPart = hrp
-	monster.Parent = parent
-	return monster
-end
-
-return ProceduralModels
+generateMap()
