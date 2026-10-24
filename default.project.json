@@ -2,22 +2,14 @@
   "name": "TerrorObby150",
   "tree": {
     "$className": "DataModel",
-
-    "Workspace": {
-      "$properties": {
-        "StreamingEnabled": false,
-        "StreamingMinRadius": 64,
-        "StreamingTargetRadius": 160
-      }
-    },
-
     "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
       "ProceduralModels": {
         "$path": "ProceduralModels.lua"
       }
     },
-
     "ServerScriptService": {
+      "$className": "ServerScriptService",
       "LevelGenerator": {
         "$path": "LevelGenerator.server.lua"
       },
@@ -28,8 +20,8 @@
         "$path": "Monetization.server.lua"
       }
     },
-
     "StarterPlayer": {
+      "$className": "StarterPlayer",
       "StarterPlayerScripts": {
         "$className": "StarterPlayerScripts",
         "HorrorClient": {
@@ -41,6 +33,12 @@
         "ShopClient": {
           "$path": "ShopClient.client.lua"
         }
+      }
+    },
+    "Workspace": {
+      "$className": "Workspace",
+      "$properties": {
+        "StreamingEnabled": true
       }
     }
   }
