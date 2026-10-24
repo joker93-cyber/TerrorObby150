@@ -1,12 +1,26 @@
 -- GameManager.server.lua
--- Ubicación en Roblox: ServerScriptService.GameManager
--- Controla etapas, checkpoints, escondites, invisibilidad, linterna, Crucifijo Sagrado,
--- guardado de datos (DataStore), recompensas PvP e IA de monstruos.
+-- Ubicación: ServerScriptService.GameManager
+-- Incluye piso de seguridad garantizado y rescate inmediato si el jugador cae al vacío.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local DataStoreService = game:GetService("DataStoreService")
 local Workspace = game:GetService("Workspace")
+
+-- Garantizar piso de seguridad en (0, 9, 0) aunque LevelGenerator aún esté iniciando
+if not Workspace:FindFirstChild("MainSafetySpawn") then
+	local safetyFloor = Instance.new("SpawnLocation")
+	safetyFloor.Name = "MainSafetySpawn"
+	safetyFloor.Size = Vector3.new(50, 2, 50)
+	safetyFloor.CFrame = CFrame.new(0, 9, 0)
+	safetyFloor.Color = Color3.fromRGB(50, 45, 50)
+	safetyFloor.Material = Enum.Material.Cobblestone
+	safetyFloor.Anchored = true
+	safetyFloor.CanCollide = true
+	safetyFloor.Neutral = true
+	safetyFloor.Duration = 0
+	safetyFloor.Parent = Workspace
+end
 
 local remotesFolder = ReplicatedStorage:FindFirstChild("Remotes")
 if not remotesFolder then
@@ -84,29 +98,30 @@ local function getCheckpointPart(stageNumber)
 	if checkpointsFolder then
 		local found = checkpointsFolder:FindFirstChild("Checkpoint_" .. tostring(stageNumber))
 			or checkpointsFolder:FindFirstChild(tostring(stageNumber))
-		if found then return found end
-	end
-
-	for _, obj in ipairs(Workspace:GetDescendants()) do
-		if obj:IsA("BasePart") then
-			if obj:GetAttribute("StageNumber") == stageNumber or obj.Name == "Checkpoint_" .. tostring(stageNumber) then
-				return obj
-			end
+		if found and found:IsA("BasePart") then
+			return found
 		end
 	end
-	return nil
+	return Workspace:FindFirstChild("MainSafetySpawn")
 end
 
 local function teleportToStage(player, character, stageNumber)
 	local hrp = character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+
+	-- Esperar brevemente si los Checkpoints aún se están generando al arrancar el servidor
 	local checkpoint = getCheckpointPart(stageNumber)
-	if hrp and checkpoint then
-		local targetPos = checkpoint.Position + Vector3.new(0, 4.5, 0)
-		pcall(function()
-			player:RequestStreamAroundAsync(targetPos, 3)
-		end)
-		character:PivotTo(CFrame.new(targetPos))
+	local targetPos = Vector3.new(0, 14, 0)
+	if checkpoint then
+		targetPos = checkpoint.Position + Vector3.new(0, 4.5, 0)
 	end
+
+	pcall(function()
+		player:RequestStreamAroundAsync(targetPos, 3)
+	end)
+
+	hrp.AssemblyLinearVelocity = Vector3.zero
+	character:PivotTo(CFrame.new(targetPos))
 end
 
 local function onPlayerAdded(player)
@@ -164,7 +179,7 @@ local function onPlayerAdded(player)
 		light.Enabled = false
 		light.Parent = hrp
 
-		task.wait(0.15)
+		task.wait(0.1)
 		teleportToStage(player, character, stageVal.Value)
 	end)
 end
@@ -183,6 +198,31 @@ end)
 game:BindToClose(function()
 	for _, player in ipairs(Players:GetPlayers()) do
 		savePlayerData(player)
+	end
+end)
+
+-- Rescate automático si un jugador cae por debajo del mapa (Evita bucles de caída infinita)
+task.spawn(function()
+	while true do
+		task.wait(0.35)
+		for _, player in ipairs(Players:GetPlayers()) do
+			local char = player.Character
+			local hrp = char and char:FindFirstChild("HumanoidRootPart")
+			local hum = char and char:FindFirstChildOfClass("Humanoid")
+			if hrp and hum and hum.Health > 0 then
+				local cp = getCheckpointPart(
+					(SessionData[player.UserId] and SessionData[player.UserId].Stage) or 1
+				)
+				local minAllowedY = cp and (cp.Position.Y - 45) or -35
+				if hrp.Position.Y < minAllowedY then
+					teleportToStage(
+						player,
+						char,
+						(SessionData[player.UserId] and SessionData[player.UserId].Stage) or 1
+					)
+				end
+			end
+		end
 	end
 end)
 
@@ -297,7 +337,7 @@ local function hookObject(obj)
 end
 
 task.spawn(function()
-	task.wait(1)
+	task.wait(0.5)
 	for _, obj in ipairs(Workspace:GetDescendants()) do
 		hookObject(obj)
 	end
@@ -358,7 +398,6 @@ useCrucifixEvent.OnServerEvent:Connect(function(player)
 	end
 end)
 
--- Bucle de IA de Monstruos (Respeta Armarios e Invisibilidad Sombría)
 task.spawn(function()
 	while true do
 		task.wait(0.25)
@@ -473,4 +512,4 @@ _G.TerrorObbyGrantItem = function(player, itemType)
 	return false, "Artículo desconocido."
 end
 
-print("[GameManager] Sistema completo actualizado con soporte para Combate y Habilidades.")
+print("[GameManager] Sistema completo inicializado con piso de emergencia y rescate anti-vacío.")
