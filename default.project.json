@@ -6,6 +6,9 @@
       "$className": "ReplicatedStorage",
       "ProceduralModels": {
         "$path": "ProceduralModels.lua"
+      },
+      "AbilityConfig": {
+        "$path": "AbilityConfig.lua"
       }
     },
     "ServerScriptService": {
@@ -18,6 +21,9 @@
       },
       "Monetization": {
         "$path": "Monetization.server.lua"
+      },
+      "CombatAndAbilityServer": {
+        "$path": "CombatAndAbilityServer.server.lua"
       }
     },
     "StarterPlayer": {
@@ -32,6 +38,9 @@
         },
         "ShopClient": {
           "$path": "ShopClient.client.lua"
+        },
+        "CombatAndAbilityClient": {
+          "$path": "CombatAndAbilityClient.client.lua"
         }
       }
     },
