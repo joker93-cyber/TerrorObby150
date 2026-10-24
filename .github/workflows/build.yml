@@ -8,6 +8,11 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Los secretos se leen a nivel de job para que el "if" de la publicación pueda verlos
+    env:
+      ROBLOX_API_KEY: ${{ secrets.ROBLOX_API_KEY }}
+      UNIVERSE_ID: ${{ secrets.UNIVERSE_ID }}
+      PLACE_ID: ${{ secrets.PLACE_ID }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -34,9 +39,12 @@ jobs:
           echo "Todos los 11 archivos de código y configuración verificados correctamente."
 
       - name: Install Rojo
-        uses: rojo-rbx/install-rojo@v1
-        with:
-          version: "7.4.4"
+        run: |
+          curl -sSfL -o rojo.zip https://github.com/rojo-rbx/rojo/releases/download/v7.4.4/rojo-7.4.4-linux-x86_64.zip
+          unzip -o rojo.zip rojo
+          chmod +x rojo
+          sudo mv rojo /usr/local/bin/rojo
+          rojo --version
 
       - name: Build TerrorObby150.rbxl
         run: rojo build default.project.json --output TerrorObby150.rbxl
@@ -47,12 +55,8 @@ jobs:
           name: TerrorObby150-rbxl
           path: TerrorObby150.rbxl
 
-      - name: Publish to Roblox Open Cloud (Conditional)
+      - name: Publish to Roblox Open Cloud
         if: env.ROBLOX_API_KEY != '' && env.UNIVERSE_ID != '' && env.PLACE_ID != ''
-        env:
-          ROBLOX_API_KEY: ${{ secrets.ROBLOX_API_KEY }}
-          UNIVERSE_ID: ${{ secrets.UNIVERSE_ID }}
-          PLACE_ID: ${{ secrets.PLACE_ID }}
         run: |
           HTTP_STATUS=$(curl -s -o response.txt -w "%{http_code}" \
             -X POST "https://apis.roblox.com/universes/v1/${UNIVERSE_ID}/places/${PLACE_ID}/versions?versionType=Published" \
@@ -65,3 +69,8 @@ jobs:
             exit 1
           fi
           echo "Publicación exitosa en Roblox Open Cloud."
+
+      - name: Aviso si no hay secretos
+        if: env.ROBLOX_API_KEY == '' || env.UNIVERSE_ID == '' || env.PLACE_ID == ''
+        run: |
+          echo "::warning::No se publicó en Roblox. Faltan los secretos ROBLOX_API_KEY, UNIVERSE_ID o PLACE_ID."
