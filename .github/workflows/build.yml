@@ -1,75 +1,64 @@
-name: Build and Publish TerrorObby150
+name: Build and Deploy TerrorObby150
 
 on:
   push:
-    branches: ["main", "master"]
+    branches: [ "main", "master" ]
   workflow_dispatch:
-
-permissions:
-  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Verificar archivos del proyecto
+      - name: Verify required project files
         run: |
-          for f in \
-            default.project.json \
-            ProceduralModels.lua \
-            LevelGenerator.server.lua \
-            GameManager.server.lua \
-            Monetization.server.lua \
-            HorrorClient.client.lua \
-            AudioManager.client.lua \
-            ShopClient.client.lua
-          do
-            if [ ! -f "$f" ]; then
-              echo "::error::Falta el archivo $f"
+          for file in \
+            "default.project.json" \
+            "ProceduralModels.lua" \
+            "LevelGenerator.server.lua" \
+            "GameManager.server.lua" \
+            "Monetization.server.lua" \
+            "HorrorClient.client.lua" \
+            "AudioManager.client.lua" \
+            "ShopClient.client.lua"; do
+            if [ ! -f "$file" ]; then
+              echo "Error: Falta el archivo obligatorio $file"
               exit 1
             fi
           done
+          echo "Todos los archivos base verificados correctamente."
 
-      - name: Instalar Rojo 7.4.4
-        run: |
-          curl -fsSL -o rojo.zip "https://github.com/rojo-rbx/rojo/releases/download/v7.4.4/rojo-7.4.4-linux-x86_64.zip"
-          unzip -o rojo.zip rojo
-          chmod +x rojo
-          sudo mv rojo /usr/local/bin/rojo
-          rojo --version
+      - name: Install Rojo
+        uses: rojo-rbx/install-rojo@v1
+        with:
+          version: "7.4.4"
 
-      - name: Compilar TerrorObby150.rbxl
+      - name: Build TerrorObby150.rbxl
         run: rojo build default.project.json --output TerrorObby150.rbxl
 
-      - name: Subir copia descargable (Artifact)
+      - name: Upload built place artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TerrorObby150
+          name: TerrorObby150-rbxl
           path: TerrorObby150.rbxl
-          if-no-files-found: error
-          retention-days: 14
 
-      - name: Publicar directamente en Roblox (Open Cloud)
+      - name: Publish to Roblox Open Cloud (Conditional)
+        if: env.ROBLOX_API_KEY != '' && env.UNIVERSE_ID != '' && env.PLACE_ID != ''
         env:
           ROBLOX_API_KEY: ${{ secrets.ROBLOX_API_KEY }}
-          UNIVERSE_ID: ${{ secrets.ROBLOX_UNIVERSE_ID }}
-          PLACE_ID: ${{ secrets.ROBLOX_PLACE_ID }}
+          UNIVERSE_ID: ${{ secrets.UNIVERSE_ID }}
+          PLACE_ID: ${{ secrets.PLACE_ID }}
         run: |
-          if [ -z "$ROBLOX_API_KEY" ] || [ -z "$UNIVERSE_ID" ] || [ -z "$PLACE_ID" ]; then
-            echo "::warning::Faltan los Secrets de Roblox. Se generó el archivo .rbxl pero no se subió a Roblox."
-            exit 0
-          fi
           HTTP_STATUS=$(curl -s -o response.txt -w "%{http_code}" \
             -X POST "https://apis.roblox.com/universes/v1/${UNIVERSE_ID}/places/${PLACE_ID}/versions?versionType=Published" \
             -H "x-api-key: ${ROBLOX_API_KEY}" \
             -H "Content-Type: application/octet-stream" \
             --data-binary @TerrorObby150.rbxl)
-          cat response.txt
           if [ "$HTTP_STATUS" -ne 200 ]; then
-            echo "::error::Error al publicar en Roblox (HTTP $HTTP_STATUS)"
+            echo "Error al publicar en Open Cloud. Código HTTP: $HTTP_STATUS"
+            cat response.txt
             exit 1
           fi
-          echo "✅ ¡Juego publicado exitosamente en tu cuenta de Roblox!"
+          echo "Publicación exitosa en Roblox Open Cloud."
